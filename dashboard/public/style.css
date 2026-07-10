@@ -1,36 +1,20 @@
 :root {
-  /* Light defaults. */
-  --surface-1: #fcfcfb;
-  --page: #f9f9f7;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
+  /* Dark is the app default (not OS-driven) - see index.html's inline theme
+     script. These bare :root values are just the no-JS fallback. */
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
   --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.10);
+  --border: rgba(255, 255, 255, 0.10);
   --good: #0ca30c;
   --warning: #fab219;
   --serious: #ec835a;
   --critical: #d03b3b;
 }
 
-/* Automatic fallback: follows the OS/browser theme when the user hasn't
-   picked one explicitly via the toggle button. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface-1: #1a1a19;
-    --page: #0d0d0d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.10);
-    --good: #0ca30c;
-    --warning: #fab219;
-    --serious: #ec835a;
-    --critical: #d03b3b;
-  }
-}
-
-/* Explicit choice (the toggle button, persisted in localStorage) always wins
-   over the OS preference in either direction. */
+/* The toggle button's explicit choice (persisted in localStorage) picks one
+   of these regardless of the default above. */
 :root[data-theme="light"] {
   --surface-1: #fcfcfb;
   --page: #f9f9f7;
@@ -313,6 +297,46 @@ main {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+.weather-overview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.weather-overview-card:active {
+  background: var(--border);
+}
+
+.weather-overview-card .stat-title {
+  align-self: flex-start;
+}
+
+.weather-overview-card .woc-icon {
+  font-size: 84px;
+  line-height: 1;
+  margin: 6px 0;
+}
+
+.weather-overview-card .woc-temps {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-overview-card .woc-temps .min {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.weather-overview-card .woc-precip {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .stat-item {

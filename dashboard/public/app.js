@@ -80,17 +80,27 @@ function quickTile(view, title, meta, status) {
   return `<div class="card quick-tile" data-jump="${view}"><span class="dot ${status}"></span><span class="name">${title}</span><span class="meta">${meta}</span></div>`;
 }
 
+function renderWeatherOverviewCard(weather) {
+  const today = weather.days[0];
+  if (!today) {
+    return `<div class="stat-card weather-overview-card" data-jump="weather"><div class="stat-title">Weather</div><div class="empty">${weather.error || 'unavailable'}</div></div>`;
+  }
+  return `
+    <div class="stat-card weather-overview-card" data-jump="weather">
+      <div class="stat-title">Weather</div>
+      <div class="woc-icon" title="${today.label}">${today.icon}</div>
+      <div class="woc-temps">${today.tempMax}° <span class="min">${today.tempMin}°</span></div>
+      <div class="woc-precip">💧 ${today.precipProbability ?? 0}%</div>
+    </div>`;
+}
+
 function renderOverview(data) {
   const ov = data.overview;
   const agentMeta = ov.agent.status === 'good' ? `${ov.agent.latencyMs} ms` : ov.agent.error || 'unreachable';
-  const today = data.weather.days[0];
-  const weatherMeta = today ? `${today.icon} ${today.tempMax}°/${today.tempMin}° · 💧${today.precipProbability ?? 0}%` : data.weather.error || 'unavailable';
   return (
     card('Server agent', agentMeta, ov.agent.status) +
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
-    quickTile('jenkins', 'Jenkins', data.jenkins.summary, data.jenkins.status) +
-    quickTile('sonarqube', 'SonarQube', data.sonarqube.summary, data.sonarqube.status) +
-    quickTile('weather', 'Weather', weatherMeta, 'good') +
+    renderWeatherOverviewCard(data.weather) +
     renderSystemCard('Server Pi', ov.serverSystem) +
     renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
   );
