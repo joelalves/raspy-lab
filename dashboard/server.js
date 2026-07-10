@@ -25,7 +25,7 @@ let cache = {
   sonarqube: { status: 'warning', projects: [], summary: '', error: null },
   weather: { location: null, days: [], hourly: [], error: null },
   postgres: { status: 'warning', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: null },
-  pihole: { status: 'warning', enabled: null, queriesToday: null, blockedToday: null, percentBlocked: null, domainsBlocked: null, error: null },
+  pihole: { status: 'warning', enabled: null, queriesToday: null, blockedToday: null, percentBlocked: null, domainsBlocked: null, activeClients: null, topBlocked: [], topPermitted: [], error: null },
 };
 
 async function fetchJson(url, options = {}, timeoutMs = 5000) {
@@ -345,16 +345,28 @@ async function getPiholeSid() {
 
 async function refreshPihole() {
   const { url, password } = config.pihole || {};
-  const empty = { enabled: null, queriesToday: null, blockedToday: null, percentBlocked: null, domainsBlocked: null };
+  const empty = {
+    enabled: null,
+    queriesToday: null,
+    blockedToday: null,
+    percentBlocked: null,
+    domainsBlocked: null,
+    activeClients: null,
+    topBlocked: [],
+    topPermitted: [],
+  };
   if (!url || !password) return { status: 'warning', ...empty, error: 'not configured' };
   try {
     const sid = await getPiholeSid();
     const headers = { 'X-FTL-SID': sid };
-    const [blocking, summary] = await Promise.all([
+    const [blocking, summary, topBlockedData, topPermittedData] = await Promise.all([
       fetchJson(`${url}/api/dns/blocking`, { headers }),
       fetchJson(`${url}/api/stats/summary`, { headers }),
+      fetchJson(`${url}/api/stats/top_domains?blocked=true&count=8`, { headers }),
+      fetchJson(`${url}/api/stats/top_domains?count=8`, { headers }),
     ]);
     const enabled = blocking.blocking === 'enabled';
+    const toList = (data) => (data.domains || []).map((d) => ({ domain: d.domain, count: d.count }));
     logOnce('pihole', null);
     return {
       status: enabled ? 'good' : 'warning',
@@ -363,6 +375,9 @@ async function refreshPihole() {
       blockedToday: summary.queries.blocked,
       percentBlocked: Number((summary.queries.percent_blocked ?? 0).toFixed(1)),
       domainsBlocked: summary.gravity.domains_being_blocked,
+      activeClients: summary.clients ? summary.clients.active : null,
+      topBlocked: toList(topBlockedData),
+      topPermitted: toList(topPermittedData),
       error: null,
     };
   } catch (err) {

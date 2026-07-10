@@ -111,7 +111,7 @@ function renderOverview(data) {
     card('Server agent', agentMeta, ov.agent.status) +
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
     card('PostgreSQL', pgMeta, pg.status) +
-    card('Pi-hole', phMeta, ph.status) +
+    quickTile('pihole', 'Pi-hole', phMeta, ph.status) +
     renderWeatherOverviewCard(data.weather) +
     renderSystemCard('Server Pi', ov.serverSystem) +
     renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
@@ -187,14 +187,61 @@ function renderWeather(section) {
   if (!section.days.length) return `<div class="empty">No forecast available.</div>`;
   const hourlyHtml = section.hourly && section.hourly.length
     ? `
-      <div class="weather-section-title">Today, hour by hour</div>
+      <div class="section-title">Today, hour by hour</div>
       <div class="hourly-row">${section.hourly.map(hourlyCard).join('')}</div>`
     : '';
   return `
     <div class="weather-location">📍 ${section.location}</div>
     ${hourlyHtml}
-    <div class="weather-section-title">Next 5 days</div>
+    <div class="section-title">Next 5 days</div>
     <div class="weather-row">${section.days.map(weatherDayCard).join('')}</div>`;
+}
+
+function domainRow(item) {
+  return `<div class="domain-row"><span class="domain-name">${item.domain}</span><span class="domain-count">${item.count.toLocaleString()}</span></div>`;
+}
+
+function renderPihole(section) {
+  if (section.error) return `<div class="error-msg">${section.error}</div>`;
+  if (section.percentBlocked == null) return `<div class="empty">No data available.</div>`;
+
+  const blockedPct = section.percentBlocked;
+  const allowedPct = Number((100 - blockedPct).toFixed(1));
+  const topBlockedHtml = section.topBlocked.length ? section.topBlocked.map(domainRow).join('') : `<div class="empty">No blocked domains yet.</div>`;
+  const topPermittedHtml = section.topPermitted.length ? section.topPermitted.map(domainRow).join('') : `<div class="empty">No permitted domains yet.</div>`;
+
+  return `
+    <div class="stat-card">
+      <div class="stat-title">Pi-hole</div>
+      <div class="stat-grid">
+        ${statItem('Status', section.enabled ? 'Enabled' : 'Disabled', section.enabled ? '' : 'warning')}
+        ${statItem('Queries today', section.queriesToday.toLocaleString())}
+        ${statItem('Blocked today', section.blockedToday.toLocaleString())}
+        ${statItem('% Blocked', `${blockedPct}%`)}
+        ${statItem('Blocklist', `${section.domainsBlocked.toLocaleString()} domains`)}
+        ${statItem('Active clients', section.activeClients ?? 'n/a')}
+      </div>
+    </div>
+    <div class="pihole-proportion-wrap">
+      <div class="pihole-proportion-bar">
+        <div class="segment blocked" style="width: ${blockedPct}%"></div>
+        <div class="segment allowed" style="width: ${allowedPct}%"></div>
+      </div>
+      <div class="pihole-proportion-legend">
+        <span><i class="swatch blocked"></i>Blocked (${blockedPct}%)</span>
+        <span><i class="swatch allowed"></i>Allowed (${allowedPct}%)</span>
+      </div>
+    </div>
+    <div class="pihole-domain-columns">
+      <div class="pihole-domain-list">
+        <div class="section-title">Top Blocked Domains</div>
+        ${topBlockedHtml}
+      </div>
+      <div class="pihole-domain-list">
+        <div class="section-title">Top Permitted Domains</div>
+        ${topPermittedHtml}
+      </div>
+    </div>`;
 }
 
 function setNavBadge(view, text, status) {
@@ -213,6 +260,7 @@ async function refresh() {
     document.getElementById('view-jenkins').innerHTML = renderJenkins(data.jenkins);
     document.getElementById('view-sonarqube').innerHTML = renderSonarQube(data.sonarqube);
     document.getElementById('view-weather').innerHTML = renderWeather(data.weather);
+    document.getElementById('view-pihole').innerHTML = renderPihole(data.pihole);
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
@@ -231,6 +279,11 @@ async function refresh() {
       'weather',
       data.weather.days.length ? `${data.weather.days[0].icon} ${data.weather.days[0].tempMax}°` : '',
       'good'
+    );
+    setNavBadge(
+      'pihole',
+      data.pihole.percentBlocked != null ? `${data.pihole.percentBlocked}% blocked` : '',
+      data.pihole.status
     );
 
     document.getElementById('updated-at').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;

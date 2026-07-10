@@ -120,8 +120,10 @@ Shows the things worth checking before diving into a specific tab:
 - **PostgreSQL** — actual database health (connects and queries), not just
   "the container is running." Shows active connection count, database size,
   and version when healthy.
-- **Pi-hole** — blocking enabled/disabled, % of DNS queries blocked today,
-  total queries, and blocklist size.
+- **Pi-hole** — a quick-glance summary tile, tap it to jump to the dedicated
+  **Pi-hole tab** with the full picture: status, queries/blocked today,
+  blocklist size, active clients, a blocked-vs-allowed proportion bar, and
+  the top 8 blocked and top 8 permitted domains.
 - **Server Pi** — CPU temperature, 1-minute load average, memory %, disk %,
   and uptime for the *server* Pi (via `server-agent`'s `/api/system`).
 - **This Pi (dashboard)** — the same host stats for the touchscreen Pi itself,
