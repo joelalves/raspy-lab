@@ -115,7 +115,7 @@ async function refreshJenkins() {
     }));
     const failing = jobs.filter((j) => j.status === 'critical' || j.status === 'serious').length;
     const building = jobs.filter((j) => j.building).length;
-    const summary = `${jobs.length} job${jobs.length === 1 ? '' : 's'}${failing ? `, ${failing} failing` : ''}${building ? `, ${building} building` : ''}`;
+    const summary = `${jobs.length - failing}/${jobs.length} passing${building ? ` · ${building} building` : ''}`;
     logOnce('jenkins', null);
     return { status: worstStatus(jobs.map((j) => j.status)), jobs, summary, error: null };
   } catch (err) {
@@ -162,7 +162,7 @@ async function refreshSonarQube() {
       })
     );
     const failing = projects.filter((p) => p.status === 'critical' || p.status === 'warning').length;
-    const summary = `${projects.length} project${projects.length === 1 ? '' : 's'}${failing ? `, ${failing} failing gate${failing === 1 ? '' : 's'}` : ''}`;
+    const summary = `${projects.length - failing}/${projects.length} passing`;
     logOnce('sonarqube', null);
     return { status: worstStatus(projects.map((p) => p.status)), projects, summary, error: null };
   } catch (err) {
