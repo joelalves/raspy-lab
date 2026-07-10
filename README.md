@@ -116,6 +116,61 @@ Since the touchscreen Pi has no keyboard/mouse, navigation is 100% tap-driven:
   refresh of all sources via `POST /api/refresh`, instead of waiting for the
   next automatic poll.
 
+## Troubleshooting
+
+### Viewing logs
+
+The dashboard now logs each source's failure/recovery to stdout (once per
+transition, not once per poll, so it won't flood the journal):
+
+```bash
+journalctl -u dashboard.service -f          # follow live
+journalctl -u dashboard.service -n 100 --no-pager   # last 100 lines
+```
+
+For the exact error message + raw data currently cached, hit the API directly
+(works from the Pi itself or any machine on the LAN):
+
+```bash
+curl -s http://localhost:8080/api/data | python3 -m json.tool
+```
+
+Look at `.sonarqube.error` (or `.docker.error`, `.jenkins.error`,
+`.overview.agent.error`) for the specific failure.
+
+### SonarQube connection failing
+
+Common causes, roughly in order of likelihood:
+- **Wrong token or URL** in `config.json`'s `sonarqube` block - double check
+  against what you generated in SonarQube's My Account → Security.
+- **Self-signed HTTPS cert** - Node's `fetch` rejects untrusted certs by
+  default; either put a real cert in front of SonarQube or (for a trusted LAN
+  only) start the dashboard with `NODE_TLS_REJECT_UNAUTHORIZED=0` set in
+  `dashboard.service`'s `Environment=` lines.
+- **Wrong host/port or SonarQube not reachable from the touchscreen Pi** -
+  verify with `curl -u YOUR_TOKEN: http://<sonarqube-host>:9000/api/projects/search`
+  directly from the touchscreen Pi; if that fails, it's a network/port issue,
+  not a dashboard bug.
+
+### Weather: switch from city name to lat/long
+
+If geocoding a city name isn't resolving correctly (ambiguous name, wrong
+country matched, etc.), skip geocoding entirely by giving coordinates
+directly in `dashboard/config.json`:
+
+```json
+"weather": {
+  "latitude": 38.7223,
+  "longitude": -9.1393,
+  "locationName": "Lisbon"
+}
+```
+
+`latitude`/`longitude` take priority over `location` when both are present.
+Look up your coordinates from any map app (e.g. long-press a location in
+Google Maps to see its lat/long), then restart the dashboard:
+`sudo systemctl restart dashboard.service`.
+
 ## Notes
 
 - Everything is read-only/visibility-only by design — no start/stop/restart

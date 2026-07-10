@@ -1,9 +1,12 @@
 # Install on the touchscreen Pi:
-#   sudo cp dashboard.service /etc/systemd/system/dashboard.service
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now dashboard.service
-#
-# Adjust User/WorkingDirectory if you didn't deploy to /home/pi/raspy-lab/dashboard
+#   1. Run `whoami` and `pwd` (from inside the dashboard/ folder) first.
+#   2. Replace REPLACE_WITH_YOUR_USERNAME below with that username on BOTH
+#      the User= line and the WorkingDirectory= path (Raspberry Pi OS
+#      Bookworm no longer creates a default "pi" user - it's whatever
+#      username you picked in Raspberry Pi Imager).
+#   3. sudo cp dashboard.service /etc/systemd/system/dashboard.service
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable --now dashboard.service
 
 [Unit]
 Description=Raspy Lab kiosk dashboard server
@@ -12,8 +15,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/raspy-lab/dashboard
+User=REPLACE_WITH_YOUR_USERNAME
+WorkingDirectory=/home/REPLACE_WITH_YOUR_USERNAME/raspy-lab/dashboard
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=3

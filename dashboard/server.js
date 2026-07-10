@@ -43,6 +43,16 @@ function worstStatus(statuses) {
   return statuses.reduce((worst, s) => (order.indexOf(s) > order.indexOf(worst) ? s : worst), 'good');
 }
 
+// Logs to stdout (visible via `journalctl -u dashboard.service`), but only on
+// change - so a persistent failure logs once instead of once per poll cycle.
+const lastLogged = {};
+function logOnce(source, message) {
+  if (lastLogged[source] === message) return;
+  lastLogged[source] = message;
+  if (message) console.error(`[${source}] ${message}`);
+  else console.log(`[${source}] recovered`);
+}
+
 async function refreshDocker() {
   const { url, apiKey } = config.dockerAgent || {};
   if (!url) return { status: 'warning', containers: [], summary: 'not configured', error: 'not configured' };
@@ -62,6 +72,7 @@ async function refreshDocker() {
           : 'critical',
     }));
     const healthy = containers.filter((c) => c.status === 'good').length;
+    logOnce('docker', null);
     return {
       status: worstStatus(containers.map((c) => c.status)),
       containers,
@@ -69,6 +80,7 @@ async function refreshDocker() {
       error: null,
     };
   } catch (err) {
+    logOnce('docker', err.message);
     return { status: 'critical', containers: [], summary: 'unreachable', error: err.message };
   }
 }
@@ -104,8 +116,10 @@ async function refreshJenkins() {
     const failing = jobs.filter((j) => j.status === 'critical' || j.status === 'serious').length;
     const building = jobs.filter((j) => j.building).length;
     const summary = `${jobs.length} job${jobs.length === 1 ? '' : 's'}${failing ? `, ${failing} failing` : ''}${building ? `, ${building} building` : ''}`;
+    logOnce('jenkins', null);
     return { status: worstStatus(jobs.map((j) => j.status)), jobs, summary, error: null };
   } catch (err) {
+    logOnce('jenkins', err.message);
     return { status: 'critical', jobs: [], summary: 'unreachable', error: err.message };
   }
 }
@@ -149,8 +163,10 @@ async function refreshSonarQube() {
     );
     const failing = projects.filter((p) => p.status === 'critical' || p.status === 'warning').length;
     const summary = `${projects.length} project${projects.length === 1 ? '' : 's'}${failing ? `, ${failing} failing gate${failing === 1 ? '' : 's'}` : ''}`;
+    logOnce('sonarqube', null);
     return { status: worstStatus(projects.map((p) => p.status)), projects, summary, error: null };
   } catch (err) {
+    logOnce('sonarqube', err.message);
     return { status: 'critical', projects: [], summary: 'unreachable', error: err.message };
   }
 }
@@ -215,8 +231,10 @@ async function refreshWeather() {
         precipProbability: data.daily.precipitation_probability_max[i],
       };
     });
+    logOnce('weather', null);
     return { location: loc.name, days, error: null };
   } catch (err) {
+    logOnce('weather', err.message);
     return { location: null, days: [], error: err.message };
   }
 }
@@ -234,8 +252,10 @@ async function refreshOverview() {
       });
       agent = { status: 'good', latencyMs: Date.now() - start, error: null };
       serverSystem = data;
+      logOnce('agent', null);
     } catch (err) {
       agent = { status: 'critical', latencyMs: null, error: err.message };
+      logOnce('agent', err.message);
     }
   }
 
