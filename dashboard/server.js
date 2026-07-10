@@ -490,18 +490,29 @@ async function refreshShelly() {
   }
 }
 
+// Weather changes slowly and Open-Meteo doesn't need frequent polling, so it
+// runs on its own longer cycle instead of the fast main refresh loop.
+const WEATHER_REFRESH_MS = ((config.weather && config.weather.refreshIntervalMinutes) || 30) * 60 * 1000;
+let weatherCache = { location: null, days: [], hourly: [], error: null };
+
+async function refreshWeatherLoop() {
+  weatherCache = await refreshWeather();
+}
+
+refreshWeatherLoop();
+setInterval(refreshWeatherLoop, WEATHER_REFRESH_MS);
+
 async function refreshAll() {
-  const [overview, docker, jenkins, sonarqube, weather, postgres, pihole, shelly] = await Promise.all([
+  const [overview, docker, jenkins, sonarqube, postgres, pihole, shelly] = await Promise.all([
     refreshOverview(),
     refreshDocker(),
     refreshJenkins(),
     refreshSonarQube(),
-    refreshWeather(),
     refreshPostgres(),
     refreshPihole(),
     refreshShelly(),
   ]);
-  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather, postgres, pihole, shelly };
+  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather: weatherCache, postgres, pihole, shelly };
 }
 
 refreshAll();

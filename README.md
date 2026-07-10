@@ -69,6 +69,9 @@ that drives your 3.5"–7" screen.
    - `sonarqube.url` / `sonarqube.token`
    - `weather.location` → e.g. `"Lisbon, Portugal"` (or set `weather.latitude`
      / `weather.longitude` directly if you'd rather not geocode a city name)
+   - `weather.refreshIntervalMinutes` → how often to re-poll Open-Meteo
+     (default 30 — weather runs on its own cycle, independent of
+     `refreshIntervalSeconds`, since it doesn't need frequent polling)
    - `pihole.url` / `pihole.password` → your Pi-hole's address and admin
      password (only needed if you run Pi-hole on the server Pi)
    - `shelly.url` → your Shelly device's IP (e.g. `"http://192.168.1.100"`),

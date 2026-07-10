@@ -14,7 +14,8 @@
     "token": "your-sonarqube-user-token"
   },
   "weather": {
-    "location": "Lisbon, Portugal"
+    "location": "Lisbon, Portugal",
+    "refreshIntervalMinutes": 30
   },
   "pihole": {
     "url": "http://SERVER_PI_IP",
