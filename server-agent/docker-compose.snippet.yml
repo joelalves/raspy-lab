@@ -26,3 +26,10 @@ services:
       - PGDATABASE=yourdb
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+      - NETWORK_NAME_HERE
+
+networks:
+  NETWORK_NAME_HERE:
+    external: true
