@@ -52,8 +52,8 @@ function tempStatus(c) {
   return '';
 }
 
-function statItem(label, value, statusCls) {
-  return `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value ${statusCls || ''}">${value}</span></div>`;
+function statItem(label, value, statusCls, wide) {
+  return `<div class="stat-item${wide ? ' wide' : ''}"><span class="stat-label">${label}</span><span class="stat-value ${statusCls || ''}">${value}</span></div>`;
 }
 
 function renderSystemCard(title, sys) {
@@ -66,12 +66,14 @@ function renderSystemCard(title, sys) {
     <div class="stat-card">
       <div class="stat-title">${title}</div>
       <div class="stat-grid">
+        ${statItem('Host', sys.hostname, '', true)}
+        ${statItem('Model', sys.model || 'n/a', '', true)}
+        ${statItem('OS', sys.osName || 'n/a', '', true)}
         ${statItem('CPU temp', tempVal, tempStatus(sys.cpuTempC))}
         ${statItem('Load (1m)', sys.loadAvg[0].toFixed(2))}
         ${statItem('Memory', `${sys.memory.percent}%`, pctStatus(sys.memory.percent))}
         ${statItem('Disk', diskVal, sys.disk ? pctStatus(sys.disk.percent) : '')}
         ${statItem('Uptime', formatUptime(sys.uptimeSeconds))}
-        ${statItem('Host', sys.hostname)}
       </div>
     </div>`;
 }

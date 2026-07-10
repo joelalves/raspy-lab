@@ -11,6 +11,26 @@ function readCpuTempC() {
   }
 }
 
+function readModel() {
+  try {
+    // Raspberry Pi firmware exposes the board model here, e.g.
+    // "Raspberry Pi 4 Model B Rev 1.4". Null-terminated, not a real line.
+    return fs.readFileSync('/proc/device-tree/model', 'utf8').replace(/\0/g, '').trim();
+  } catch {
+    return null; // not a Raspberry Pi (or no device-tree, e.g. running elsewhere)
+  }
+}
+
+function readOsPrettyName() {
+  try {
+    const content = fs.readFileSync('/etc/os-release', 'utf8');
+    const match = content.match(/^PRETTY_NAME="?([^"\n]+)"?/m);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 function readDiskUsage(mount = '/') {
   try {
     const out = execSync(`df -Pk ${mount}`, { encoding: 'utf8' });
@@ -32,6 +52,9 @@ function getSystemInfo() {
   const usedMem = totalMem - os.freemem();
   return {
     hostname: os.hostname(),
+    model: readModel(),
+    osName: readOsPrettyName(),
+    kernel: os.release(),
     uptimeSeconds: os.uptime(),
     loadAvg: os.loadavg(),
     cpuCount: os.cpus().length,

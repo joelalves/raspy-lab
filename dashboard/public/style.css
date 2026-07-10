@@ -365,6 +365,14 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.stat-item.wide {
+  grid-column: 1 / -1;
+}
+
+.stat-item.wide .stat-value {
+  font-size: 15px;
+}
+
 .stat-item .stat-value.warning { color: var(--warning); }
 .stat-item .stat-value.serious { color: var(--serious); }
 .stat-item .stat-value.critical { color: var(--critical); }
