@@ -1,4 +1,5 @@
 node_modules/
 dashboard/config.json
+dashboard/data/
 *.log
 .scannerwork/

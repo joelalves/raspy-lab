@@ -112,11 +112,16 @@ function renderOverview(data) {
   const phMeta = ph.percentBlocked != null
     ? `${ph.enabled ? 'enabled' : 'disabled'} · ${ph.percentBlocked}% blocked · ${ph.queriesToday} queries`
     : ph.error || 'unreachable';
+  const sh = data.shelly;
+  const shMeta = sh.currentPowerW != null
+    ? `${sh.currentPowerW} W · ${(sh.todayConsumedWh / 1000).toFixed(1)} kWh today`
+    : sh.error || 'unreachable';
   return (
     card('Server agent', agentMeta, ov.agent.status) +
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
     card('PostgreSQL', pgMeta, pg.status) +
     quickTile('pihole', 'Pi-hole', phMeta, ph.status) +
+    quickTile('shelly', 'Shelly', shMeta, sh.status) +
     renderWeatherOverviewCard(data.weather)
   );
 }
@@ -257,6 +262,74 @@ function renderPihole(section) {
     </div>`;
 }
 
+function renderPowerChart(history) {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const points = history.filter((h) => h.time >= cutoff);
+  if (points.length < 2) return `<div class="empty">Not enough history yet - check back in a few minutes.</div>`;
+
+  const height = 200;
+  const pad = { top: 12, right: 8, bottom: 8, left: 8 };
+  const plotW = 1000 - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const minTime = points[0].time;
+  const maxTime = points[points.length - 1].time;
+  const timeSpan = Math.max(maxTime - minTime, 1);
+  const maxPower = Math.max(...points.map((p) => p.powerW), 1);
+
+  const xFor = (t) => pad.left + ((t - minTime) / timeSpan) * plotW;
+  const yFor = (w) => pad.top + plotH - (w / maxPower) * plotH;
+
+  const linePoints = points.map((p) => `${xFor(p.time).toFixed(1)},${yFor(p.powerW).toFixed(1)}`).join(' ');
+  const areaPoints = `${pad.left},${pad.top + plotH} ${linePoints} ${xFor(maxTime).toFixed(1)},${pad.top + plotH}`;
+
+  const startLabel = new Date(minTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const endLabel = new Date(maxTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  return `
+    <svg viewBox="0 0 1000 ${height}" preserveAspectRatio="none" class="power-chart">
+      <line x1="${pad.left}" y1="${pad.top + plotH}" x2="${1000 - pad.right}" y2="${pad.top + plotH}" class="pc-axis" />
+      <polygon points="${areaPoints}" class="pc-area"></polygon>
+      <polyline points="${linePoints}" class="pc-line"></polyline>
+    </svg>
+    <div class="pc-labels">
+      <span>${startLabel}</span>
+      <span class="pc-max">Peak ${Math.round(maxPower)} W</span>
+      <span>${endLabel}</span>
+    </div>`;
+}
+
+function renderShelly(section) {
+  if (section.error) return `<div class="error-msg">${section.error}</div>`;
+  if (section.currentPowerW == null) return `<div class="empty">No data available.</div>`;
+
+  const co2Today = section.todayCo2Grams >= 1000 ? `${(section.todayCo2Grams / 1000).toFixed(2)} kg` : `${Math.round(section.todayCo2Grams)} g`;
+  const co2Lifetime = section.lifetimeCo2Grams >= 1e6
+    ? `${(section.lifetimeCo2Grams / 1e6).toFixed(2)} t`
+    : `${(section.lifetimeCo2Grams / 1000).toFixed(1)} kg`;
+  const solarNote = section.lifetimeReturnedWh > 0
+    ? statItem('Solar exported (lifetime)', `${(section.lifetimeReturnedWh / 1000).toFixed(0)} kWh`, '', true)
+    : '';
+
+  return `
+    <div class="stat-card">
+      <div class="stat-title">Shelly</div>
+      <div class="stat-grid">
+        ${statItem('Current power', `${section.currentPowerW} W`, section.overpower ? 'critical' : '')}
+        ${statItem('Voltage', `${section.voltage} V`)}
+        ${statItem('Today', `${(section.todayConsumedWh / 1000).toFixed(2)} kWh`)}
+        ${statItem('Today CO₂', co2Today)}
+        ${statItem('Lifetime net', `${(section.lifetimeConsumedWh / 1000).toFixed(0)} kWh`)}
+        ${statItem('Lifetime CO₂', co2Lifetime)}
+        ${solarNote}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">Power, last 24h</div>
+      ${renderPowerChart(section.history)}
+    </div>`;
+}
+
 function setNavBadge(view, text, status) {
   const el = document.getElementById(`badge-${view}`);
   el.textContent = text;
@@ -275,10 +348,11 @@ async function refresh() {
     document.getElementById('view-weather').innerHTML = renderWeather(data.weather);
     document.getElementById('view-pihole').innerHTML = renderPihole(data.pihole);
     document.getElementById('view-system').innerHTML = renderSystemTab(data);
+    document.getElementById('view-shelly').innerHTML = renderShelly(data.shelly);
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
-    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status, data.pihole.status]);
+    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status, data.pihole.status, data.shelly.status]);
 
     const badgeDot = document.querySelector('#overall-badge .dot');
     badgeDot.className = `dot ${overall}`;
@@ -301,6 +375,7 @@ async function refresh() {
     );
     const serverTemp = data.overview.serverSystem && data.overview.serverSystem.cpuTempC;
     setNavBadge('system', serverTemp != null ? `${serverTemp}°C` : '', tempStatus(serverTemp));
+    setNavBadge('shelly', data.shelly.currentPowerW != null ? `${data.shelly.currentPowerW} W` : '', data.shelly.status);
 
     document.getElementById('updated-at').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;
   } catch (err) {

@@ -19,6 +19,10 @@
   "pihole": {
     "url": "http://SERVER_PI_IP",
     "password": "your-pihole-admin-password"
+  },
+  "shelly": {
+    "url": "http://SHELLY_DEVICE_IP",
+    "carbonIntensityGramsPerKwh": 200
   }
 }
 

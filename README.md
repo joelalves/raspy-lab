@@ -45,13 +45,15 @@ on your existing "server" Pi.
    curl http://<server-pi-ip>:9090/api/postgres -H "x-api-key: <your-key>"
    ```
 
-Jenkins, SonarQube, and Pi-hole need no changes — the dashboard talks to their
-existing REST APIs directly. Just create:
+Jenkins, SonarQube, Pi-hole, and Shelly need no changes — the dashboard talks
+to their existing REST APIs directly. Just create:
 - A Jenkins API token (your user → Configure → API Token).
 - A SonarQube user token (My Account → Security → Generate Token).
 - Nothing to create for Pi-hole (v6) — just its URL and your existing admin
   password. The dashboard logs into Pi-hole's own session-based API the same
   way the web UI does.
+- Nothing to create for Shelly either — Gen1 devices (Shelly EM/1PM/Plug S/etc.)
+  serve an unauthenticated local HTTP API by default. Just its IP address.
 
 ## 2. Touchscreen Pi (new) — the dashboard
 
@@ -69,6 +71,10 @@ that drives your 3.5"–7" screen.
      / `weather.longitude` directly if you'd rather not geocode a city name)
    - `pihole.url` / `pihole.password` → your Pi-hole's address and admin
      password (only needed if you run Pi-hole on the server Pi)
+   - `shelly.url` → your Shelly device's IP (e.g. `"http://192.168.1.100"`),
+     and `shelly.carbonIntensityGramsPerKwh` → your grid's approximate
+     gCO2/kWh (defaults to 200, a rough Portugal average — adjust to your
+     own country/provider's published figure for more accuracy)
 5. Test it manually first: `node server.js`, then browse to
    `http://localhost:8080` from the Pi (or `http://<pi-ip>:8080` from another
    machine) and confirm all tabs populate.
@@ -124,11 +130,35 @@ Shows the things worth checking before diving into a specific tab:
   **Pi-hole tab** with the full picture: status, queries/blocked today,
   blocklist size, active clients, a blocked-vs-allowed proportion bar, and
   the top 8 blocked and top 8 permitted domains.
-- **Server Pi** — CPU temperature, 1-minute load average, memory %, disk %,
-  and uptime for the *server* Pi (via `server-agent`'s `/api/system`).
-- **This Pi (dashboard)** — the same host stats for the touchscreen Pi itself,
-  read locally (no network round-trip), so you can tell a blank dashboard
-  apart from a dashboard Pi that's actually struggling.
+- **Shelly** — a quick-glance summary tile (current power + today's
+  consumption), tap it to jump to the dedicated **Shelly tab**.
+- **Weather** — today's icon and high, tap it to jump to the Weather tab.
+
+Hardware/OS details for both Pis live on their own **System tab**: CPU
+temperature, load average, memory %, disk %, uptime, model, and OS version —
+for the *server* Pi (via `server-agent`'s `/api/system`) and for the
+touchscreen Pi itself (read locally, no network round-trip — so you can tell
+a blank dashboard apart from a dashboard Pi that's actually struggling).
+
+### Shelly tab
+
+Real-time power monitoring via a Gen1 Shelly device's local HTTP API (Shelly
+EM, 1PM, Plug S, etc. — no cloud account or auth needed). Shows current power
+draw, voltage, today's consumption and CO₂, lifetime net consumption and CO₂,
+lifetime solar export if your device tracks `total_returned`, and a 24-hour
+power chart.
+
+CO₂ is estimated from measured kWh × `shelly.carbonIntensityGramsPerKwh`
+(config.json) — a static approximation, not a live grid-carbon-intensity feed,
+since that would need a separate third-party API/account. Adjust the factor
+to your own country/provider's published average for better accuracy.
+
+The 24h chart is backed by a small local history: the dashboard samples the
+Shelly every poll cycle but only *persists* a point every 5 minutes (to
+`dashboard/data/shelly-history.json`, gitignored), keeping the last 7 days and
+surviving dashboard restarts/reboots. Right after first deploying this, the
+chart will say "not enough history yet" until a few 5-minute samples land —
+that's expected, not a bug.
 
 ### Touch-friendly by design
 
