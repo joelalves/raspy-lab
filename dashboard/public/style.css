@@ -204,7 +204,15 @@ main {
   align-items: start;
 }
 
-#view-weather.active { display: block; }
+/* Docker/Jenkins/SonarQube are lists of rows, not a tile grid - a narrow grid
+   column was squeezing the name down to a couple of characters next to the
+   metadata. Full-width rows give the name room and read better as a list. */
+#view-weather.active,
+#view-docker.active,
+#view-jenkins.active,
+#view-sonarqube.active {
+  display: block;
+}
 
 /* Fallback for narrower/portrait touchscreens (e.g. 3.5"-7" portrait panels). */
 @media (max-width: 700px) {
@@ -243,15 +251,15 @@ main {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
+  padding: 18px 20px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .card .name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   flex: 1;
   min-width: 0;
@@ -261,7 +269,7 @@ main {
 }
 
 .card .meta {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
