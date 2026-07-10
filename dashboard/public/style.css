@@ -79,7 +79,7 @@ header {
 }
 
 header h1 {
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 600;
   margin: 0;
 }
@@ -88,7 +88,7 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -121,8 +121,8 @@ header h1 {
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -153,9 +153,9 @@ nav {
 nav button {
   width: 100%;
   min-width: 0;
-  min-height: 52px;
+  min-height: 56px;
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   border: none;
   background: transparent;
@@ -190,8 +190,8 @@ nav button span {
 }
 
 nav button small {
-  max-width: 72px;
-  font-size: 11px;
+  max-width: 76px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   white-space: nowrap;
@@ -215,8 +215,9 @@ main {
 .view.active {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 8px;
+  gap: 10px;
   align-content: start;
+  align-items: start;
 }
 
 #view-weather.active { display: block; }
@@ -258,15 +259,15 @@ main {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 14px 16px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .card .name {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   flex: 1;
   min-width: 0;
@@ -276,7 +277,7 @@ main {
 }
 
 .card .meta {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -295,7 +296,7 @@ main {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 14px 16px;
   margin-bottom: 8px;
 }
 
@@ -303,31 +304,31 @@ main {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .stat-item {
   background: var(--page);
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
 }
 
 .stat-item .stat-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   display: block;
 }
 
 .stat-item .stat-value {
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -337,14 +338,14 @@ main {
 .stat-item .stat-value.critical { color: var(--critical); }
 
 .weather-location {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .weather-section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -440,7 +441,7 @@ main {
 
 .empty, .error-msg {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   padding: 20px 6px;
   text-align: center;
 }
@@ -450,7 +451,7 @@ main {
 footer {
   flex-shrink: 0;
   padding: 6px 12px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
   text-align: right;
