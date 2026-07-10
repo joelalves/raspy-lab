@@ -1,0 +1,13 @@
+{
+  "name": "server-agent",
+  "version": "1.0.0",
+  "description": "Read-only Docker stats API for the raspy-lab dashboard",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2",
+    "express": "^4.19.2"
+  }
+}

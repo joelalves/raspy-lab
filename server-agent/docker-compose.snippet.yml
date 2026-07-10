@@ -1,0 +1,16 @@
+# Add this service to the docker-compose.yml on your EXISTING server Pi
+# (the one already running frontend, backend, jenkins, sonarqube, postgres).
+#
+# It mounts the Docker socket READ-ONLY so it can report container stats
+# but cannot start/stop/modify anything.
+
+services:
+  server-agent:
+    build: ./server-agent   # or push/pull a prebuilt image instead
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      - AGENT_API_KEY=change-me-to-a-long-random-string
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro

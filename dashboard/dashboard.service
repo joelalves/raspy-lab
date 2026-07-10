@@ -1,0 +1,23 @@
+# Install on the touchscreen Pi:
+#   sudo cp dashboard.service /etc/systemd/system/dashboard.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now dashboard.service
+#
+# Adjust User/WorkingDirectory if you didn't deploy to /home/pi/raspy-lab/dashboard
+
+[Unit]
+Description=Raspy Lab kiosk dashboard server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/raspy-lab/dashboard
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target
