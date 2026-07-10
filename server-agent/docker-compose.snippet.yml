@@ -26,6 +26,14 @@ services:
       - PGDATABASE=yourdb
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Without these, the container sees its own isolated /proc and the
+      # node:20-alpine base image's /etc/os-release - not the host Pi's real
+      # model/OS info, which /api/system reports. /proc/device-tree is
+      # usually a symlink to /sys/firmware/devicetree/base, and bind-mounting
+      # a symlink path doesn't reliably carry the target into a container -
+      # mount the real underlying path instead.
+      - /sys/firmware/devicetree/base:/sys/firmware/devicetree/base:ro
+      - /etc/os-release:/etc/os-release:ro
     networks:
       - default
       - NETWORK_NAME_HERE

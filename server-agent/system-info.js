@@ -12,13 +12,19 @@ function readCpuTempC() {
 }
 
 function readModel() {
-  try {
-    // Raspberry Pi firmware exposes the board model here, e.g.
-    // "Raspberry Pi 4 Model B Rev 1.4". Null-terminated, not a real line.
-    return fs.readFileSync('/proc/device-tree/model', 'utf8').replace(/\0/g, '').trim();
-  } catch {
-    return null; // not a Raspberry Pi (or no device-tree, e.g. running elsewhere)
+  // Raspberry Pi firmware exposes the board model here, e.g. "Raspberry Pi 4
+  // Model B Rev 1.4" (null-terminated, not a real line). /proc/device-tree is
+  // usually a symlink to /sys/firmware/devicetree/base - bind-mounting a
+  // symlink path into a container doesn't reliably carry the target through,
+  // so try the real underlying sysfs path too.
+  for (const p of ['/proc/device-tree/model', '/sys/firmware/devicetree/base/model']) {
+    try {
+      return fs.readFileSync(p, 'utf8').replace(/\0/g, '').trim();
+    } catch {
+      // try the next candidate
+    }
   }
+  return null; // not a Raspberry Pi, or neither path is mounted/available
 }
 
 function readOsPrettyName() {
