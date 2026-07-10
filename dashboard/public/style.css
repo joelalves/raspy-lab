@@ -1,4 +1,5 @@
 :root {
+  /* Light defaults. */
   --surface-1: #fcfcfb;
   --page: #f9f9f7;
   --text-primary: #0b0b0b;
@@ -11,6 +12,8 @@
   --critical: #d03b3b;
 }
 
+/* Automatic fallback: follows the OS/browser theme when the user hasn't
+   picked one explicitly via the toggle button. */
 @media (prefers-color-scheme: dark) {
   :root {
     --surface-1: #1a1a19;
@@ -24,6 +27,26 @@
     --serious: #ec835a;
     --critical: #d03b3b;
   }
+}
+
+/* Explicit choice (the toggle button, persisted in localStorage) always wins
+   over the OS preference in either direction. */
+:root[data-theme="light"] {
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --border: rgba(11, 11, 11, 0.10);
+}
+
+:root[data-theme="dark"] {
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --border: rgba(255, 255, 255, 0.10);
 }
 
 * { box-sizing: border-box; }
@@ -69,6 +92,7 @@ header h1 {
   color: var(--text-secondary);
 }
 
+#theme-btn,
 #refresh-btn {
   border: 1px solid var(--border);
   background: transparent;
@@ -82,6 +106,7 @@ header h1 {
   touch-action: manipulation;
 }
 
+#theme-btn:active,
 #refresh-btn:active {
   background: var(--border);
 }

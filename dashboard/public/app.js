@@ -189,6 +189,21 @@ async function refresh() {
   }
 }
 
+const THEME_KEY = 'raspy-dashboard-theme';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-btn').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+applyTheme(document.documentElement.getAttribute('data-theme'));
+
+document.getElementById('theme-btn').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+
 document.getElementById('refresh-btn').addEventListener('click', async (e) => {
   e.target.classList.add('spinning');
   try {
