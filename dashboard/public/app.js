@@ -112,10 +112,13 @@ function renderOverview(data) {
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
     card('PostgreSQL', pgMeta, pg.status) +
     quickTile('pihole', 'Pi-hole', phMeta, ph.status) +
-    renderWeatherOverviewCard(data.weather) +
-    renderSystemCard('Server Pi', ov.serverSystem) +
-    renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
+    renderWeatherOverviewCard(data.weather)
   );
+}
+
+function renderSystemTab(data) {
+  const ov = data.overview;
+  return renderSystemCard('Server Pi', ov.serverSystem) + renderSystemCard('This Pi (dashboard)', ov.dashboardSystem);
 }
 
 function renderDocker(section) {
@@ -261,6 +264,7 @@ async function refresh() {
     document.getElementById('view-sonarqube').innerHTML = renderSonarQube(data.sonarqube);
     document.getElementById('view-weather').innerHTML = renderWeather(data.weather);
     document.getElementById('view-pihole').innerHTML = renderPihole(data.pihole);
+    document.getElementById('view-system').innerHTML = renderSystemTab(data);
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
@@ -285,6 +289,8 @@ async function refresh() {
       data.pihole.percentBlocked != null ? `${data.pihole.percentBlocked}% blocked` : '',
       data.pihole.status
     );
+    const serverTemp = data.overview.serverSystem && data.overview.serverSystem.cpuTempC;
+    setNavBadge('system', serverTemp != null ? `${serverTemp}°C` : '', tempStatus(serverTemp));
 
     document.getElementById('updated-at').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;
   } catch (err) {
