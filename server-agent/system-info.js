@@ -11,12 +11,27 @@ function readCpuTempC() {
   }
 }
 
+function readModelFromCpuinfo() {
+  try {
+    const content = fs.readFileSync('/proc/cpuinfo', 'utf8');
+    const match = content.match(/^Model\s*:\s*(.+)$/m);
+    return match ? match[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function readModel() {
-  // Raspberry Pi firmware exposes the board model here, e.g. "Raspberry Pi 4
-  // Model B Rev 1.4" (null-terminated, not a real line). /proc/device-tree is
-  // usually a symlink to /sys/firmware/devicetree/base - bind-mounting a
-  // symlink path into a container doesn't reliably carry the target through,
-  // so try the real underlying sysfs path too.
+  // /proc/cpuinfo is standard procfs - it reflects the real host CPU/hardware
+  // even inside a container, no bind mount needed, and Raspberry Pi kernels
+  // append a human-readable "Model" line to it directly. Try that first.
+  const fromCpuinfo = readModelFromCpuinfo();
+  if (fromCpuinfo) return fromCpuinfo;
+
+  // Fallback: device-tree firmware string, e.g. "Raspberry Pi 4 Model B Rev
+  // 1.4" (null-terminated, not a real line). /proc/device-tree is usually a
+  // symlink to /sys/firmware/devicetree/base - bind-mounting a symlink path
+  // doesn't reliably carry the target into a container - try both.
   for (const p of ['/proc/device-tree/model', '/sys/firmware/devicetree/base/model']) {
     try {
       return fs.readFileSync(p, 'utf8').replace(/\0/g, '').trim();
@@ -24,7 +39,7 @@ function readModel() {
       // try the next candidate
     }
   }
-  return null; // not a Raspberry Pi, or neither path is mounted/available
+  return null; // not a Raspberry Pi, or nothing is mounted/available
 }
 
 function readOsPrettyName() {
