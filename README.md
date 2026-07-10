@@ -83,7 +83,8 @@ touchscreens run in portrait. Nothing to configure — it's a CSS media query
 
 ### Weather tab
 
-7-day forecast (today + 6 days) for the location you set in
+5-day forecast (today + 4 days), plus an hourly breakdown for the rest of
+today, for the location you set in
 `config.json`'s `weather.location`, via [Open-Meteo](https://open-meteo.com/) —
 free, no API key or account needed. The server geocodes the city name once
 per process start, then pulls daily min/max temp, a weather icon, and

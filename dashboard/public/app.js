@@ -171,7 +171,7 @@ function renderWeather(section) {
   return `
     <div class="weather-location">📍 ${section.location}</div>
     ${hourlyHtml}
-    <div class="weather-section-title">Next 7 days</div>
+    <div class="weather-section-title">Next 5 days</div>
     <div class="weather-row">${section.days.map(weatherDayCard).join('')}</div>`;
 }
 

@@ -220,7 +220,7 @@ async function refreshWeather() {
       `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
         `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
         `&hourly=temperature_2m,weathercode,precipitation_probability` +
-        `&current_weather=true&timezone=auto&forecast_days=7`
+        `&current_weather=true&timezone=auto&forecast_days=5`
     );
     const days = data.daily.time.map((date, i) => {
       const [icon, label] = weatherCodeInfo(data.daily.weathercode[i]);
