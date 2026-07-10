@@ -241,7 +241,6 @@ async function refreshWeather() {
       };
     });
 
-    const today = data.daily.time[0];
     const nowLocal = data.current_weather.time; // e.g. "2026-07-10T14:00", same tz as hourly.time
     const hourly = data.hourly.time
       .map((time, i) => ({
@@ -250,7 +249,8 @@ async function refreshWeather() {
         tempC: Math.round(data.hourly.temperature_2m[i]),
         precipProbability: data.hourly.precipitation_probability[i],
       }))
-      .filter((h) => h.time.startsWith(today) && h.time >= nowLocal)
+      .filter((h) => h.time >= nowLocal)
+      .slice(0, 10) // next ~10 hours, crossing into tomorrow near midnight if needed
       .map((h) => {
         const [icon, label] = weatherCodeInfo(h.code);
         return { time: h.time, icon, label, tempC: h.tempC, precipProbability: h.precipProbability };

@@ -174,8 +174,13 @@ function weatherDayCard(day, index) {
     <div class="weather-card">
       <div class="wc-day">${dayLabel}</div>
       <div class="wc-icon" title="${day.label}">${day.icon}</div>
+      <div class="wc-label">${day.label}</div>
       <div class="wc-temps">${day.tempMax}° <span class="min">${day.tempMin}°</span></div>
-      <div class="wc-precip">💧 ${day.precipProbability ?? 0}%</div>
+      <div class="wc-details">
+        <span>💧 ${day.precipProbability ?? 0}%</span>
+        <span>💨 ${day.windSpeedKmh} km/h</span>
+        <span>☀️ UV ${day.uvIndex}</span>
+      </div>
     </div>`;
 }
 

@@ -495,16 +495,11 @@ main {
 .hourly-row {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
 }
 
-.hourly-row::-webkit-scrollbar { display: none; }
-
 .hourly-card {
-  flex: 0 0 auto;
-  width: 72px;
+  flex: 1;
+  min-width: 0;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -513,6 +508,11 @@ main {
   flex-direction: column;
   align-items: center;
   gap: 3px;
+}
+
+@media (max-width: 700px) {
+  .hourly-row { flex-wrap: wrap; }
+  .hourly-card { flex: 1 1 18%; }
 }
 
 .hourly-card .hc-hour {
@@ -560,6 +560,12 @@ main {
 
 .weather-card .wc-icon { font-size: 48px; }
 
+.weather-card .wc-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
 .weather-card .wc-temps {
   font-size: 20px;
   font-weight: 600;
@@ -568,8 +574,12 @@ main {
 
 .weather-card .wc-temps .min { color: var(--text-muted); font-weight: 500; }
 
-.weather-card .wc-precip {
-  font-size: 13px;
+.weather-card .wc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
