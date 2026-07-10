@@ -335,13 +335,20 @@ main {
 }
 
 .weather-overview-card .woc-icon {
-  font-size: 84px;
+  font-size: 116px;
   line-height: 1;
-  margin: 6px 0;
+  margin: 4px 0;
+}
+
+.weather-overview-card .woc-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
 }
 
 .weather-overview-card .woc-temps {
-  font-size: 26px;
+  font-size: 38px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -351,10 +358,12 @@ main {
   font-weight: 500;
 }
 
-.weather-overview-card .woc-precip {
-  font-size: 13px;
+.weather-overview-card .woc-details {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .stat-item {

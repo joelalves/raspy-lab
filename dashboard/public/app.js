@@ -91,8 +91,13 @@ function renderWeatherOverviewCard(weather) {
     <div class="stat-card weather-overview-card" data-jump="weather">
       <div class="stat-title">Weather</div>
       <div class="woc-icon" title="${today.label}">${today.icon}</div>
+      <div class="woc-label">${today.label}</div>
       <div class="woc-temps">${today.tempMax}° <span class="min">${today.tempMin}°</span></div>
-      <div class="woc-precip">💧 ${today.precipProbability ?? 0}%</div>
+      <div class="woc-details">
+        <span>💧 ${today.precipProbability ?? 0}%</span>
+        <span>💨 ${today.windSpeedKmh} km/h</span>
+        <span>☀️ UV ${today.uvIndex}</span>
+      </div>
     </div>`;
 }
 

@@ -223,7 +223,7 @@ async function refreshWeather() {
     const loc = await resolveLocation();
     const data = await fetchJson(
       `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
-        `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+        `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,windspeed_10m_max,uv_index_max` +
         `&hourly=temperature_2m,weathercode,precipitation_probability` +
         `&current_weather=true&timezone=auto&forecast_days=5`
     );
@@ -236,6 +236,8 @@ async function refreshWeather() {
         tempMax: Math.round(data.daily.temperature_2m_max[i]),
         tempMin: Math.round(data.daily.temperature_2m_min[i]),
         precipProbability: data.daily.precipitation_probability_max[i],
+        windSpeedKmh: Math.round(data.daily.windspeed_10m_max[i]),
+        uvIndex: Math.round(data.daily.uv_index_max[i]),
       };
     });
 
