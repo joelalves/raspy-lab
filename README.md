@@ -23,15 +23,27 @@ on your existing "server" Pi.
 `server-agent/` is a small read-only HTTP API that reports:
 - Docker container stats (CPU/mem/state) via `GET /api/containers`, by reading the Docker socket (mounted `:ro` — it cannot start, stop, or modify anything)
 - Host stats for the server Pi itself via `GET /api/system` — CPU temp, load average, memory, disk usage, uptime, hostname
+- Postgres health via `GET /api/postgres` — connects with `SELECT 1`-style
+  queries to confirm the database itself is actually answering (not just that
+  its container is "running"), plus version, active connection count, and
+  database size
 
 1. Copy the `server-agent/` folder onto the server Pi (or just add it to the
    existing repo there).
 2. Add the service from `server-agent/docker-compose.snippet.yml` to your
-   existing `docker-compose.yml`, set a real `AGENT_API_KEY`, then:
+   existing `docker-compose.yml`, set a real `AGENT_API_KEY`, and fill in the
+   `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` values. **Create a dedicated
+   read-only monitoring role** rather than reusing your app's own DB
+   credentials (commands are in the compose snippet's comments) — the agent
+   only needs `pg_monitor` + `CONNECT`, nothing more. Then:
    ```bash
    docker compose up -d --build server-agent
    ```
-3. Confirm it works: `curl http://<server-pi-ip>:9090/api/containers -H "x-api-key: <your-key>"`
+3. Confirm it works:
+   ```bash
+   curl http://<server-pi-ip>:9090/api/containers -H "x-api-key: <your-key>"
+   curl http://<server-pi-ip>:9090/api/postgres -H "x-api-key: <your-key>"
+   ```
 
 Jenkins and SonarQube need no changes — the dashboard talks to their existing
 REST APIs directly. Just create:
@@ -100,6 +112,9 @@ Shows the things worth checking before diving into a specific tab:
   container status, since "agent unreachable" (network/agent down) and
   "container unhealthy" (agent reachable, container itself is broken) need
   different reactions.
+- **PostgreSQL** — actual database health (connects and queries), not just
+  "the container is running." Shows active connection count, database size,
+  and version when healthy.
 - **Server Pi** — CPU temperature, 1-minute load average, memory %, disk %,
   and uptime for the *server* Pi (via `server-agent`'s `/api/system`).
 - **This Pi (dashboard)** — the same host stats for the touchscreen Pi itself,

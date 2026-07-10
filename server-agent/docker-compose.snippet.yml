@@ -3,6 +3,13 @@
 #
 # It mounts the Docker socket READ-ONLY so it can report container stats
 # but cannot start/stop/modify anything.
+#
+# Postgres health check: create a dedicated read-only monitoring role rather
+# than reusing your app's own credentials, e.g. from psql:
+#   CREATE ROLE monitoring WITH LOGIN PASSWORD 'change-me' NOSUPERUSER;
+#   GRANT pg_monitor TO monitoring;   -- lets it read pg_stat_activity etc.
+#   GRANT CONNECT ON DATABASE yourdb TO monitoring;
+# Then set PGUSER/PGPASSWORD below to that role, not your app's user.
 
 services:
   server-agent:
@@ -12,5 +19,10 @@ services:
       - "9090:9090"
     environment:
       - AGENT_API_KEY=change-me-to-a-long-random-string
+      - PGHOST=postgres   # the postgres service's name in this compose file
+      - PGPORT=5432
+      - PGUSER=monitoring
+      - PGPASSWORD=change-me
+      - PGDATABASE=yourdb
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

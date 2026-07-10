@@ -24,6 +24,7 @@ let cache = {
   jenkins: { status: 'warning', jobs: [], summary: '', error: null },
   sonarqube: { status: 'warning', projects: [], summary: '', error: null },
   weather: { location: null, days: [], hourly: [], error: null },
+  postgres: { status: 'warning', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: null },
 };
 
 async function fetchJson(url, options = {}, timeoutMs = 5000) {
@@ -287,15 +288,31 @@ async function refreshOverview() {
   return { agent, serverSystem, dashboardSystem };
 }
 
+async function refreshPostgres() {
+  const { url, apiKey } = config.dockerAgent || {};
+  if (!url) return { status: 'warning', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: 'not configured' };
+  try {
+    const data = await fetchJson(`${url}/api/postgres`, {
+      headers: apiKey ? { 'x-api-key': apiKey } : {},
+    });
+    logOnce('postgres', data.error);
+    return data;
+  } catch (err) {
+    logOnce('postgres', err.message);
+    return { status: 'critical', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: err.message };
+  }
+}
+
 async function refreshAll() {
-  const [overview, docker, jenkins, sonarqube, weather] = await Promise.all([
+  const [overview, docker, jenkins, sonarqube, weather, postgres] = await Promise.all([
     refreshOverview(),
     refreshDocker(),
     refreshJenkins(),
     refreshSonarQube(),
     refreshWeather(),
+    refreshPostgres(),
   ]);
-  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather };
+  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather, postgres };
 }
 
 refreshAll();

@@ -97,9 +97,14 @@ function renderWeatherOverviewCard(weather) {
 function renderOverview(data) {
   const ov = data.overview;
   const agentMeta = ov.agent.status === 'good' ? `${ov.agent.latencyMs} ms` : ov.agent.error || 'unreachable';
+  const pg = data.postgres;
+  const pgMeta = pg.status === 'good'
+    ? `${pg.connections} conn · ${formatBytes(pg.databaseSizeBytes)} · ${pg.version}`
+    : pg.error || 'unreachable';
   return (
     card('Server agent', agentMeta, ov.agent.status) +
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
+    card('PostgreSQL', pgMeta, pg.status) +
     renderWeatherOverviewCard(data.weather) +
     renderSystemCard('Server Pi', ov.serverSystem) +
     renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
@@ -204,7 +209,7 @@ async function refresh() {
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
-    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status]);
+    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status]);
 
     const badgeDot = document.querySelector('#overall-badge .dot');
     badgeDot.className = `dot ${overall}`;

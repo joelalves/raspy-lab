@@ -1,5 +1,6 @@
 const express = require('express');
 const Docker = require('dockerode');
+const { Client } = require('pg');
 const { getSystemInfo } = require('./system-info');
 
 const PORT = process.env.PORT || 9090;
@@ -64,6 +65,43 @@ app.get('/api/containers', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Connection details come from standard PG* env vars (PGHOST, PGPORT, PGUSER,
+// PGPASSWORD, PGDATABASE), which `pg` reads automatically, or DATABASE_URL if
+// set. Not the app's own DB credentials - a dedicated read-only monitoring
+// user is recommended (see server-agent/docker-compose.snippet.yml).
+async function checkPostgres() {
+  const client = new Client(
+    process.env.DATABASE_URL
+      ? { connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 }
+      : { connectionTimeoutMillis: 3000 }
+  );
+  const start = Date.now();
+  try {
+    await client.connect();
+    const [versionResult, connResult, sizeResult] = await Promise.all([
+      client.query('SELECT version()'),
+      client.query('SELECT count(*)::int AS count FROM pg_stat_activity'),
+      client.query('SELECT pg_database_size(current_database()) AS size'),
+    ]);
+    await client.end();
+    return {
+      status: 'good',
+      latencyMs: Date.now() - start,
+      version: versionResult.rows[0].version.split(' ').slice(0, 2).join(' '),
+      connections: connResult.rows[0].count,
+      databaseSizeBytes: Number(sizeResult.rows[0].size),
+      error: null,
+    };
+  } catch (err) {
+    try { await client.end(); } catch { /* already closed/never opened */ }
+    return { status: 'critical', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: err.message };
+  }
+}
+
+app.get('/api/postgres', async (req, res) => {
+  res.json(await checkPostgres());
 });
 
 app.get('/api/system', (req, res) => {
