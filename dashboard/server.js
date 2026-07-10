@@ -23,7 +23,7 @@ let cache = {
   docker: { status: 'warning', containers: [], summary: '', error: null },
   jenkins: { status: 'warning', jobs: [], summary: '', error: null },
   sonarqube: { status: 'warning', projects: [], summary: '', error: null },
-  weather: { location: null, days: [], error: null },
+  weather: { location: null, days: [], hourly: [], error: null },
 };
 
 async function fetchJson(url, options = {}, timeoutMs = 5000) {
@@ -212,13 +212,15 @@ async function resolveLocation() {
 async function refreshWeather() {
   const w = config.weather || {};
   if (!w.location && (w.latitude == null || w.longitude == null)) {
-    return { location: null, days: [], error: 'not configured' };
+    return { location: null, days: [], hourly: [], error: 'not configured' };
   }
   try {
     const loc = await resolveLocation();
     const data = await fetchJson(
       `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
-        `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7`
+        `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+        `&hourly=temperature_2m,weathercode,precipitation_probability` +
+        `&current_weather=true&timezone=auto&forecast_days=7`
     );
     const days = data.daily.time.map((date, i) => {
       const [icon, label] = weatherCodeInfo(data.daily.weathercode[i]);
@@ -231,11 +233,27 @@ async function refreshWeather() {
         precipProbability: data.daily.precipitation_probability_max[i],
       };
     });
+
+    const today = data.daily.time[0];
+    const nowLocal = data.current_weather.time; // e.g. "2026-07-10T14:00", same tz as hourly.time
+    const hourly = data.hourly.time
+      .map((time, i) => ({
+        time,
+        code: data.hourly.weathercode[i],
+        tempC: Math.round(data.hourly.temperature_2m[i]),
+        precipProbability: data.hourly.precipitation_probability[i],
+      }))
+      .filter((h) => h.time.startsWith(today) && h.time >= nowLocal)
+      .map((h) => {
+        const [icon, label] = weatherCodeInfo(h.code);
+        return { time: h.time, icon, label, tempC: h.tempC, precipProbability: h.precipProbability };
+      });
+
     logOnce('weather', null);
-    return { location: loc.name, days, error: null };
+    return { location: loc.name, days, hourly, error: null };
   } catch (err) {
     logOnce('weather', err.message);
-    return { location: null, days: [], error: err.message };
+    return { location: null, days: [], hourly: [], error: err.message };
   }
 }
 

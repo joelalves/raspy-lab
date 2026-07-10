@@ -76,11 +76,21 @@ function renderSystemCard(title, sys) {
     </div>`;
 }
 
+function quickTile(view, title, meta, status) {
+  return `<div class="card quick-tile" data-jump="${view}"><span class="dot ${status}"></span><span class="name">${title}</span><span class="meta">${meta}</span></div>`;
+}
+
 function renderOverview(data) {
   const ov = data.overview;
   const agentMeta = ov.agent.status === 'good' ? `${ov.agent.latencyMs} ms` : ov.agent.error || 'unreachable';
+  const today = data.weather.days[0];
+  const weatherMeta = today ? `${today.icon} ${today.tempMax}°/${today.tempMin}° · 💧${today.precipProbability ?? 0}%` : data.weather.error || 'unavailable';
   return (
     card('Server agent', agentMeta, ov.agent.status) +
+    quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
+    quickTile('jenkins', 'Jenkins', data.jenkins.summary, data.jenkins.status) +
+    quickTile('sonarqube', 'SonarQube', data.sonarqube.summary, data.sonarqube.status) +
+    quickTile('weather', 'Weather', weatherMeta, 'good') +
     renderSystemCard('Server Pi', ov.serverSystem) +
     renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
   );
@@ -139,11 +149,29 @@ function weatherDayCard(day, index) {
     </div>`;
 }
 
+function hourlyCard(hour) {
+  const hourLabel = new Date(hour.time).toLocaleTimeString(undefined, { hour: 'numeric' });
+  return `
+    <div class="hourly-card">
+      <div class="hc-hour">${hourLabel}</div>
+      <div class="hc-icon" title="${hour.label}">${hour.icon}</div>
+      <div class="hc-temp">${hour.tempC}°</div>
+      <div class="hc-precip">💧${hour.precipProbability ?? 0}%</div>
+    </div>`;
+}
+
 function renderWeather(section) {
   if (section.error) return `<div class="error-msg">${section.error}</div>`;
   if (!section.days.length) return `<div class="empty">No forecast available.</div>`;
+  const hourlyHtml = section.hourly && section.hourly.length
+    ? `
+      <div class="weather-section-title">Today, hour by hour</div>
+      <div class="hourly-row">${section.hourly.map(hourlyCard).join('')}</div>`
+    : '';
   return `
     <div class="weather-location">📍 ${section.location}</div>
+    ${hourlyHtml}
+    <div class="weather-section-title">Next 7 days</div>
     <div class="weather-row">${section.days.map(weatherDayCard).join('')}</div>`;
 }
 
@@ -215,13 +243,19 @@ document.getElementById('refresh-btn').addEventListener('click', async (e) => {
   e.target.classList.remove('spinning');
 });
 
+function switchView(view) {
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
+}
+
 document.querySelectorAll('nav button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('nav button').forEach((b) => b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
-  });
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+// Overview's quick-glance tiles jump straight to the relevant tab when tapped.
+document.getElementById('view-overview').addEventListener('click', (e) => {
+  const tile = e.target.closest('[data-jump]');
+  if (tile) switchView(tile.dataset.jump);
 });
 
 refresh();
