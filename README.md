@@ -45,10 +45,13 @@ on your existing "server" Pi.
    curl http://<server-pi-ip>:9090/api/postgres -H "x-api-key: <your-key>"
    ```
 
-Jenkins and SonarQube need no changes — the dashboard talks to their existing
-REST APIs directly. Just create:
+Jenkins, SonarQube, and Pi-hole need no changes — the dashboard talks to their
+existing REST APIs directly. Just create:
 - A Jenkins API token (your user → Configure → API Token).
 - A SonarQube user token (My Account → Security → Generate Token).
+- Nothing to create for Pi-hole (v6) — just its URL and your existing admin
+  password. The dashboard logs into Pi-hole's own session-based API the same
+  way the web UI does.
 
 ## 2. Touchscreen Pi (new) — the dashboard
 
@@ -64,6 +67,8 @@ that drives your 3.5"–7" screen.
    - `sonarqube.url` / `sonarqube.token`
    - `weather.location` → e.g. `"Lisbon, Portugal"` (or set `weather.latitude`
      / `weather.longitude` directly if you'd rather not geocode a city name)
+   - `pihole.url` / `pihole.password` → your Pi-hole's address and admin
+     password (only needed if you run Pi-hole on the server Pi)
 5. Test it manually first: `node server.js`, then browse to
    `http://localhost:8080` from the Pi (or `http://<pi-ip>:8080` from another
    machine) and confirm all tabs populate.
@@ -115,6 +120,8 @@ Shows the things worth checking before diving into a specific tab:
 - **PostgreSQL** — actual database health (connects and queries), not just
   "the container is running." Shows active connection count, database size,
   and version when healthy.
+- **Pi-hole** — blocking enabled/disabled, % of DNS queries blocked today,
+  total queries, and blocklist size.
 - **Server Pi** — CPU temperature, 1-minute load average, memory %, disk %,
   and uptime for the *server* Pi (via `server-agent`'s `/api/system`).
 - **This Pi (dashboard)** — the same host stats for the touchscreen Pi itself,

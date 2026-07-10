@@ -15,6 +15,10 @@
   },
   "weather": {
     "location": "Lisbon, Portugal"
+  },
+  "pihole": {
+    "url": "http://SERVER_PI_IP",
+    "password": "your-pihole-admin-password"
   }
 }
 

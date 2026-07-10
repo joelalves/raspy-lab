@@ -25,6 +25,7 @@ let cache = {
   sonarqube: { status: 'warning', projects: [], summary: '', error: null },
   weather: { location: null, days: [], hourly: [], error: null },
   postgres: { status: 'warning', latencyMs: null, version: null, connections: null, databaseSizeBytes: null, error: null },
+  pihole: { status: 'warning', enabled: null, queriesToday: null, blockedToday: null, percentBlocked: null, domainsBlocked: null, error: null },
 };
 
 async function fetchJson(url, options = {}, timeoutMs = 5000) {
@@ -32,7 +33,10 @@ async function fetchJson(url, options = {}, timeoutMs = 5000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`${res.status} ${res.statusText}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    }
     return await res.json();
   } finally {
     clearTimeout(timer);
@@ -303,16 +307,82 @@ async function refreshPostgres() {
   }
 }
 
+let piholeSession = null; // { sid, expiresAt } - cached across polls, Pi-hole sessions expire
+
+async function piholeAuth() {
+  const { url, password } = config.pihole || {};
+  // Pi-hole returns HTTP 401 even for a wrong password (not 200 + valid:false),
+  // so parse the body ourselves instead of going through fetchJson - its
+  // !res.ok check would throw before we get a chance to read session.message.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  let data;
+  try {
+    const res = await fetch(`${url}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      signal: controller.signal,
+    });
+    data = await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!data.session || !data.session.valid) {
+    throw new Error((data.session && data.session.message) || (data.error && data.error.message) || 'authentication failed');
+  }
+  piholeSession = {
+    sid: data.session.sid,
+    expiresAt: Date.now() + Math.max(data.session.validity - 30, 10) * 1000,
+  };
+  return piholeSession.sid;
+}
+
+async function getPiholeSid() {
+  if (piholeSession && Date.now() < piholeSession.expiresAt) return piholeSession.sid;
+  return piholeAuth();
+}
+
+async function refreshPihole() {
+  const { url, password } = config.pihole || {};
+  const empty = { enabled: null, queriesToday: null, blockedToday: null, percentBlocked: null, domainsBlocked: null };
+  if (!url || !password) return { status: 'warning', ...empty, error: 'not configured' };
+  try {
+    const sid = await getPiholeSid();
+    const headers = { 'X-FTL-SID': sid };
+    const [blocking, summary] = await Promise.all([
+      fetchJson(`${url}/api/dns/blocking`, { headers }),
+      fetchJson(`${url}/api/stats/summary`, { headers }),
+    ]);
+    const enabled = blocking.blocking === 'enabled';
+    logOnce('pihole', null);
+    return {
+      status: enabled ? 'good' : 'warning',
+      enabled,
+      queriesToday: summary.queries.total,
+      blockedToday: summary.queries.blocked,
+      percentBlocked: Number((summary.queries.percent_blocked ?? 0).toFixed(1)),
+      domainsBlocked: summary.gravity.domains_being_blocked,
+      error: null,
+    };
+  } catch (err) {
+    piholeSession = null; // force re-auth next cycle - session may be invalid/expired
+    logOnce('pihole', err.message);
+    return { status: 'critical', ...empty, error: err.message };
+  }
+}
+
 async function refreshAll() {
-  const [overview, docker, jenkins, sonarqube, weather, postgres] = await Promise.all([
+  const [overview, docker, jenkins, sonarqube, weather, postgres, pihole] = await Promise.all([
     refreshOverview(),
     refreshDocker(),
     refreshJenkins(),
     refreshSonarQube(),
     refreshWeather(),
     refreshPostgres(),
+    refreshPihole(),
   ]);
-  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather, postgres };
+  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather, postgres, pihole };
 }
 
 refreshAll();

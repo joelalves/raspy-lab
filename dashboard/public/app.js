@@ -103,10 +103,15 @@ function renderOverview(data) {
   const pgMeta = pg.status === 'good'
     ? `${pg.connections} conn · ${formatBytes(pg.databaseSizeBytes)} · ${pg.version}`
     : pg.error || 'unreachable';
+  const ph = data.pihole;
+  const phMeta = ph.percentBlocked != null
+    ? `${ph.enabled ? 'enabled' : 'disabled'} · ${ph.percentBlocked}% blocked · ${ph.queriesToday} queries`
+    : ph.error || 'unreachable';
   return (
     card('Server agent', agentMeta, ov.agent.status) +
     quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
     card('PostgreSQL', pgMeta, pg.status) +
+    card('Pi-hole', phMeta, ph.status) +
     renderWeatherOverviewCard(data.weather) +
     renderSystemCard('Server Pi', ov.serverSystem) +
     renderSystemCard('This Pi (dashboard)', ov.dashboardSystem)
@@ -211,7 +216,7 @@ async function refresh() {
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
-    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status]);
+    const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status, data.pihole.status]);
 
     const badgeDot = document.querySelector('#overall-badge .dot');
     badgeDot.className = `dot ${overall}`;
