@@ -319,26 +319,40 @@ function renderPowerChart(history) {
   const minTime = points[0].time;
   const maxTime = points[points.length - 1].time;
   const timeSpan = Math.max(maxTime - minTime, 1);
-  const maxPower = Math.max(...points.map((p) => p.powerW), 1);
+  // Include 0 in the range so import (positive) and export (negative) both
+  // scale correctly, and the zero-line below is always representable.
+  const maxPower = Math.max(...points.map((p) => p.powerW), 0);
+  const minPower = Math.min(...points.map((p) => p.powerW), 0);
+  const powerRange = Math.max(maxPower - minPower, 1);
 
   const xFor = (t) => pad.left + ((t - minTime) / timeSpan) * plotW;
-  const yFor = (w) => pad.top + plotH - (w / maxPower) * plotH;
+  const yFor = (w) => pad.top + plotH - ((w - minPower) / powerRange) * plotH;
 
   const linePoints = points.map((p) => `${xFor(p.time).toFixed(1)},${yFor(p.powerW).toFixed(1)}`).join(' ');
   const areaPoints = `${pad.left},${pad.top + plotH} ${linePoints} ${xFor(maxTime).toFixed(1)},${pad.top + plotH}`;
 
+  // Only draw the zero-line when the data actually crosses it - otherwise
+  // it'd just sit on top of (or off) the axis and add nothing.
+  const zeroLine = minPower < 0 && maxPower > 0
+    ? `<line x1="${pad.left}" y1="${yFor(0).toFixed(1)}" x2="${1000 - pad.right}" y2="${yFor(0).toFixed(1)}" class="pc-zero" />`
+    : '';
+
   const startLabel = new Date(minTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const endLabel = new Date(maxTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const rangeLabel = minPower < 0
+    ? `Peak ${Math.round(maxPower)} W · Low ${Math.round(minPower)} W`
+    : `Peak ${Math.round(maxPower)} W`;
 
   return `
     <svg viewBox="0 0 1000 ${height}" preserveAspectRatio="none" class="power-chart">
       <line x1="${pad.left}" y1="${pad.top + plotH}" x2="${1000 - pad.right}" y2="${pad.top + plotH}" class="pc-axis" />
+      ${zeroLine}
       <polygon points="${areaPoints}" class="pc-area"></polygon>
       <polyline points="${linePoints}" class="pc-line"></polyline>
     </svg>
     <div class="pc-labels">
       <span>${startLabel}</span>
-      <span class="pc-max">Peak ${Math.round(maxPower)} W</span>
+      <span class="pc-max">${rangeLabel}</span>
       <span>${endLabel}</span>
     </div>`;
 }
