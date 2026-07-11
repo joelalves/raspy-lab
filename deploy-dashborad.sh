@@ -24,3 +24,8 @@ rsync -av \
   "$SRC_DIR/" "$DEST_DIR/"
 
 echo "Copied dashboard/ to $DEST_DIR"
+
+echo "Restarting dashboard.service..."
+sudo systemctl restart dashboard.service
+echo "Done."
+
