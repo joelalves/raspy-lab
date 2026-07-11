@@ -77,14 +77,21 @@ async function checkPostgres() {
       ? { connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 }
       : { connectionTimeoutMillis: 3000 }
   );
+  // A pg.Client with no 'error' listener crashes the whole Node process on any
+  // async connection-level error (e.g. the server dropping the connection) -
+  // this is the actual cause of container restart loops, not just the query
+  // deprecation warning below.
+  client.on('error', () => {});
+
   const start = Date.now();
   try {
     await client.connect();
-    const [versionResult, connResult, sizeResult] = await Promise.all([
-      client.query('SELECT version()'),
-      client.query('SELECT count(*)::int AS count FROM pg_stat_activity'),
-      client.query('SELECT pg_database_size(current_database()) AS size'),
-    ]);
+    // A single Client handles one query at a time - firing these concurrently
+    // via Promise.all is deprecated in pg and was the source of the warning
+    // in the logs. Run them sequentially instead.
+    const versionResult = await client.query('SELECT version()');
+    const connResult = await client.query('SELECT count(*)::int AS count FROM pg_stat_activity');
+    const sizeResult = await client.query('SELECT pg_database_size(current_database()) AS size');
     await client.end();
     return {
       status: 'good',
