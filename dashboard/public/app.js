@@ -312,7 +312,7 @@ function renderPowerChart(history) {
   if (points.length < 2) return `<div class="empty">Not enough history yet - check back in a few minutes.</div>`;
 
   const height = 200;
-  const pad = { top: 12, right: 8, bottom: 8, left: 8 };
+  const pad = { top: 16, right: 8, bottom: 8, left: 56 };
   const plotW = 1000 - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -329,18 +329,42 @@ function renderPowerChart(history) {
   const linePoints = points.map((p) => `${xFor(p.time).toFixed(1)},${yFor(p.powerW).toFixed(1)}`).join(' ');
   const areaPoints = `${pad.left},${pad.top + plotH} ${linePoints} ${xFor(maxTime).toFixed(1)},${pad.top + plotH}`;
 
+  // Two-tone split: blue above zero (importing from the grid), green below
+  // (exporting solar surplus) - a hard color transition in the gradient at
+  // zero's exact pixel position, applied to both the line and its fill.
+  const zeroY = yFor(0);
+  const zeroOffsetPct = Math.max(0, Math.min(100, (zeroY / height) * 100)).toFixed(1);
+
+  // Axis gridlines: top (max), zero (only if the data actually crosses it),
+  // bottom (min) - each with a labeled value, like the Shelly app's chart.
+  const gridlines = [{ y: pad.top, label: `${Math.round(maxPower)} W` }];
+  if (minPower < 0 && maxPower > 0) gridlines.push({ y: zeroY, label: '0 W' });
+  gridlines.push({ y: pad.top + plotH, label: `${Math.round(minPower)} W` });
+  const gridHtml = gridlines
+    .map((g) => `
+      <line x1="${pad.left}" y1="${g.y.toFixed(1)}" x2="${1000 - pad.right}" y2="${g.y.toFixed(1)}" class="pc-grid" />
+      <text x="${pad.left - 8}" y="${g.y.toFixed(1)}" class="pc-grid-label">${g.label}</text>`)
+    .join('');
+
   const startLabel = new Date(minTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const endLabel = new Date(maxTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
   return `
     <svg viewBox="0 0 1000 ${height}" preserveAspectRatio="none" class="power-chart">
-      <line x1="${pad.left}" y1="${pad.top + plotH}" x2="${1000 - pad.right}" y2="${pad.top + plotH}" class="pc-axis" />
+      <defs>
+        <linearGradient id="powerGradient" x1="0" y1="0" x2="0" y2="${height}" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" class="pc-stop-import" />
+          <stop offset="${zeroOffsetPct}%" class="pc-stop-import" />
+          <stop offset="${zeroOffsetPct}%" class="pc-stop-export" />
+          <stop offset="100%" class="pc-stop-export" />
+        </linearGradient>
+      </defs>
+      ${gridHtml}
       <polygon points="${areaPoints}" class="pc-area"></polygon>
       <polyline points="${linePoints}" class="pc-line"></polyline>
     </svg>
     <div class="pc-labels">
       <span>${startLabel}</span>
-      <span class="pc-max">Peak ${Math.round(maxPower)} W</span>
       <span>${endLabel}</span>
     </div>`;
 }

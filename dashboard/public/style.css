@@ -599,21 +599,31 @@ main {
   display: block;
 }
 
-.power-chart .pc-axis {
+.power-chart .pc-stop-import { stop-color: var(--cat-blue); }
+.power-chart .pc-stop-export { stop-color: var(--good); }
+
+.power-chart .pc-grid {
   stroke: var(--border);
-  stroke-width: 2;
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
+.power-chart .pc-grid-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+
 .power-chart .pc-area {
-  fill: var(--cat-blue);
+  fill: url(#powerGradient);
   opacity: 0.18;
   stroke: none;
 }
 
 .power-chart .pc-line {
   fill: none;
-  stroke: var(--cat-blue);
+  stroke: url(#powerGradient);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
