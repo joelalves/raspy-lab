@@ -312,6 +312,10 @@ main {
   margin-bottom: 10px;
 }
 
+.stat-card.quick-tile:active {
+  background: var(--border);
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

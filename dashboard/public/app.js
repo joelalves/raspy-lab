@@ -82,6 +82,23 @@ function quickTile(view, title, meta, status) {
   return `<div class="card quick-tile" data-jump="${view}"><span class="dot ${status}"></span><span class="name">${title}</span><span class="meta">${meta}</span></div>`;
 }
 
+function formatCo2(grams) {
+  return grams >= 1000 ? `${(grams / 1000).toFixed(2)} kg` : `${Math.round(grams)} g`;
+}
+
+// A stat-card variant for Overview: status dot in the title, then a small
+// grid of labeled values below - unlike plain card()/quickTile(), long
+// summary text here has its own row instead of fighting the title for space.
+function statTile(view, title, status, itemsHtml) {
+  const jumpAttr = view ? ` data-jump="${view}"` : '';
+  const clickableCls = view ? ' quick-tile' : '';
+  return `
+    <div class="stat-card overview-tile${clickableCls}"${jumpAttr}>
+      <div class="stat-title"><span class="dot ${status}"></span>${title}</div>
+      <div class="stat-grid">${itemsHtml}</div>
+    </div>`;
+}
+
 function renderWeatherOverviewCard(weather) {
   const today = weather.days[0];
   if (!today) {
@@ -103,27 +120,54 @@ function renderWeatherOverviewCard(weather) {
 
 function renderOverview(data) {
   const ov = data.overview;
-  const agentMeta = ov.agent.status === 'good' ? `${ov.agent.latencyMs} ms` : ov.agent.error || 'unreachable';
-  const pg = data.postgres;
-  const pgMeta = pg.status === 'good'
-    ? `${pg.connections} conn · ${formatBytes(pg.databaseSizeBytes)} · ${pg.version}`
-    : pg.error || 'unreachable';
-  const ph = data.pihole;
-  const phMeta = ph.percentBlocked != null
-    ? `${ph.enabled ? 'enabled' : 'disabled'} · ${ph.percentBlocked}% blocked · ${ph.queriesToday} queries`
-    : ph.error || 'unreachable';
-  const sh = data.shelly;
-  const shMeta = sh.currentPowerW != null
-    ? `${sh.currentPowerW} W · ${(sh.todayConsumedWh / 1000).toFixed(1)} kWh today`
-    : sh.error || 'unreachable';
-  return (
-    card('Server agent', agentMeta, ov.agent.status) +
-    quickTile('docker', 'Docker', data.docker.summary, data.docker.status) +
-    card('PostgreSQL', pgMeta, pg.status) +
-    quickTile('pihole', 'Pi-hole', phMeta, ph.status) +
-    quickTile('shelly', 'Shelly', shMeta, sh.status) +
-    renderWeatherOverviewCard(data.weather)
+  const agent = ov.agent;
+  const agentTile = statTile(
+    null,
+    'Server Agent',
+    agent.status,
+    agent.status === 'good'
+      ? statItem('Status', 'Online', '', true) + statItem('Latency', `${agent.latencyMs} ms`, '', true)
+      : statItem('Status', agent.error || 'Unreachable', agent.status, true)
   );
+
+  const docker = data.docker;
+  const dockerTile = statTile('docker', 'Docker', docker.status, statItem('Containers', docker.summary, '', true));
+
+  const pg = data.postgres;
+  const pgTile = statTile(
+    null,
+    'PostgreSQL',
+    pg.status,
+    pg.status === 'good'
+      ? statItem('Connections', pg.connections) + statItem('DB size', formatBytes(pg.databaseSizeBytes)) + statItem('Version', pg.version, '', true)
+      : statItem('Status', pg.error || 'unreachable', pg.status, true)
+  );
+
+  const ph = data.pihole;
+  const phTile = statTile(
+    'pihole',
+    'Pi-hole',
+    ph.status,
+    ph.percentBlocked != null
+      ? statItem('Status', ph.enabled ? 'Enabled' : 'Disabled', ph.enabled ? '' : 'warning')
+        + statItem('Blocked', `${ph.percentBlocked}%`)
+        + statItem('Queries today', ph.queriesToday.toLocaleString(), '', true)
+      : statItem('Status', ph.error || 'unreachable', ph.status, true)
+  );
+
+  const sh = data.shelly;
+  const shTile = statTile(
+    'shelly',
+    'Shelly',
+    sh.status,
+    sh.currentPowerW != null
+      ? statItem('Power', `${sh.currentPowerW} W`, sh.overpower ? 'critical' : '')
+        + statItem('Today', `${(sh.todayConsumedWh / 1000).toFixed(2)} kWh`)
+        + statItem('Today CO₂', formatCo2(sh.todayCo2Grams), '', true)
+      : statItem('Status', sh.error || 'unreachable', sh.status, true)
+  );
+
+  return agentTile + dockerTile + pgTile + phTile + shTile + renderWeatherOverviewCard(data.weather);
 }
 
 function renderSystemTab(data) {
@@ -303,7 +347,7 @@ function renderShelly(section) {
   if (section.error) return `<div class="error-msg">${section.error}</div>`;
   if (section.currentPowerW == null) return `<div class="empty">No data available.</div>`;
 
-  const co2Today = section.todayCo2Grams >= 1000 ? `${(section.todayCo2Grams / 1000).toFixed(2)} kg` : `${Math.round(section.todayCo2Grams)} g`;
+  const co2Today = formatCo2(section.todayCo2Grams);
   const co2Lifetime = section.lifetimeCo2Grams >= 1e6
     ? `${(section.lifetimeCo2Grams / 1e6).toFixed(2)} t`
     : `${(section.lifetimeCo2Grams / 1000).toFixed(1)} kg`;
