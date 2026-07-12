@@ -134,6 +134,12 @@ let latestSpotify = {
   linked: false, isPlaying: false, trackName: null, artistName: null,
   albumArt: null, deviceName: null, deviceId: null, itemType: null, volumePercent: null,
 };
+// Your playlists/podcasts, loaded once per session (lazily, the first time
+// the tab has something to show them in) rather than every poll cycle -
+// this is a browse action, not live status like everything else on /api/data.
+let spotifyLibrary = { playlists: [], shows: [], loaded: false, loading: false };
+let spotifyEpisodesFor = null; // { id, name } of the show currently drilled into, or null
+let spotifyEpisodes = [];
 
 async function getSpotifyToken() {
   try {
@@ -198,6 +204,125 @@ function spotifyVolume(delta) {
   spotifyApi('PUT', `/volume?volume_percent=${next}`);
 }
 
+async function spotifyFetch(path) {
+  if (!spotifyAccessToken) await getSpotifyToken();
+  if (!spotifyAccessToken) return null;
+  try {
+    const res = await fetch(`https://api.spotify.com/v1${path}`, {
+      headers: { Authorization: `Bearer ${spotifyAccessToken}` },
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    console.error('[spotify] library fetch failed:', err.message);
+    return null;
+  }
+}
+
+async function loadSpotifyLibrary() {
+  if (spotifyLibrary.loading || spotifyLibrary.loaded) return;
+  spotifyLibrary.loading = true;
+  const [playlistsRes, showsRes] = await Promise.all([
+    spotifyFetch('/me/playlists?limit=30'),
+    spotifyFetch('/me/shows?limit=30'),
+  ]);
+  spotifyLibrary = {
+    playlists: ((playlistsRes && playlistsRes.items) || []).filter(Boolean).map((p) => ({
+      id: p.id,
+      name: p.name,
+      image: p.images && p.images[0] && p.images[0].url,
+      uri: p.uri,
+    })),
+    shows: ((showsRes && showsRes.items) || []).map((entry) => entry.show).filter(Boolean).map((s) => ({
+      id: s.id,
+      name: s.name,
+      publisher: s.publisher,
+      image: s.images && s.images[0] && s.images[0].url,
+    })),
+    loaded: true,
+    loading: false,
+  };
+  renderSpotifyTab();
+}
+
+async function openSpotifyShow(id, name) {
+  spotifyEpisodesFor = { id, name };
+  spotifyEpisodes = [];
+  renderSpotifyTab();
+  const data = await spotifyFetch(`/shows/${id}/episodes?limit=30`);
+  spotifyEpisodes = ((data && data.items) || []).filter(Boolean).map((e) => ({
+    name: e.name,
+    uri: e.uri,
+    image: e.images && e.images[0] && e.images[0].url,
+    releaseDate: e.release_date,
+    durationMs: e.duration_ms,
+  }));
+  renderSpotifyTab();
+}
+
+function closeSpotifyShow() {
+  spotifyEpisodesFor = null;
+  spotifyEpisodes = [];
+  renderSpotifyTab();
+}
+
+// Starts playback directly on this Pi's speaker, skipping the manual
+// "Play on this speaker" transfer step entirely - that's the whole point of
+// browsing playlists/podcasts from here instead of your phone.
+function spotifyPlayOnThisDevice(body) {
+  if (!spotifyDeviceId) {
+    alert("Still connecting to Spotify - give it a few seconds and try again.");
+    return;
+  }
+  spotifyApi('PUT', `/play?device_id=${spotifyDeviceId}`, body);
+}
+function spotifyPlayPlaylist(uri) {
+  spotifyPlayOnThisDevice({ context_uri: uri });
+}
+function spotifyPlayEpisode(uri) {
+  spotifyPlayOnThisDevice({ uris: [uri] });
+}
+
+function spotifyNowPlayingBar() {
+  const s = latestSpotify;
+  const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
+  const art = s.albumArt
+    ? `<img class="spotify-bar-art" src="${s.albumArt}" alt="">`
+    : '<div class="spotify-bar-art spotify-art-fallback">🎵</div>';
+  return `
+    <div class="spotify-bar">
+      ${art}
+      <div class="spotify-bar-info">
+        <div class="spotify-track-name">${s.trackName || 'Nothing playing'}</div>
+        <div class="spotify-artist-name">${s.artistName || ''}</div>
+        ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
+      </div>
+      <div class="spotify-controls">
+        <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
+        <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
+        <button id="spotify-next" class="radio-btn" title="Next">⏭</button>
+      </div>
+      <div class="spotify-volume">
+        <button id="spotify-vol-down" class="radio-btn" title="Volume down">−</button>
+        <span id="spotify-vol-pct">${s.volumePercent != null ? `${s.volumePercent}%` : '—'}</span>
+        <button id="spotify-vol-up" class="radio-btn" title="Volume up">+</button>
+      </div>
+      ${!playingHere && spotifyDeviceId && s.trackName ? '<button id="spotify-play-here" class="spotify-btn-primary spotify-bar-transfer">▶ Play here instead</button>' : ''}
+    </div>`;
+}
+
+function spotifyLibraryTile(item, kind) {
+  const img = item.image
+    ? `<img class="spotify-tile-art" src="${item.image}" alt="">`
+    : `<div class="spotify-tile-art spotify-art-fallback">${kind === 'show' ? '🎙️' : '🎵'}</div>`;
+  return `
+    <div class="spotify-tile" data-kind="${kind}" data-id="${item.id}" data-uri="${item.uri || ''}">
+      ${img}
+      <div class="spotify-tile-name">${item.name}</div>
+      ${item.publisher ? `<div class="spotify-tile-sub">${item.publisher}</div>` : ''}
+    </div>`;
+}
+
 function renderSpotifyTab() {
   const view = document.getElementById('view-spotify');
   if (!view) return;
@@ -211,27 +336,49 @@ function renderSpotifyTab() {
       </div>`;
     return;
   }
-  const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
-  const art = s.albumArt
-    ? `<img class="spotify-art" src="${s.albumArt}" alt="">`
-    : '<div class="spotify-art spotify-art-fallback">🎵</div>';
+
+  if (!spotifyLibrary.loaded && !spotifyLibrary.loading) loadSpotifyLibrary();
+
+  if (spotifyEpisodesFor) {
+    const list = spotifyEpisodes.length
+      ? spotifyEpisodes.map((e) => `
+          <div class="spotify-episode" data-uri="${e.uri}">
+            ${e.image ? `<img class="spotify-episode-art" src="${e.image}" alt="">` : '<div class="spotify-episode-art spotify-art-fallback">🎙️</div>'}
+            <div class="spotify-episode-info">
+              <div class="spotify-episode-name">${e.name}</div>
+              <div class="spotify-tile-sub">${e.releaseDate || ''}</div>
+            </div>
+            <div class="spotify-episode-play">▶</div>
+          </div>`).join('')
+      : '<p class="spotify-lib-empty">Loading episodes…</p>';
+    view.innerHTML = `
+      ${spotifyNowPlayingBar()}
+      <div class="spotify-lib-section">
+        <div class="spotify-lib-header">
+          <button id="spotify-back" class="radio-btn" title="Back">←</button>
+          <div class="spotify-lib-title">${spotifyEpisodesFor.name}</div>
+        </div>
+        <div class="spotify-episode-list">${list}</div>
+      </div>`;
+    return;
+  }
+
+  const playlistsHtml = spotifyLibrary.playlists.length
+    ? spotifyLibrary.playlists.map((p) => spotifyLibraryTile(p, 'playlist')).join('')
+    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading playlists…' : 'No playlists found.'}</p>`;
+  const showsHtml = spotifyLibrary.shows.length
+    ? spotifyLibrary.shows.map((sh) => spotifyLibraryTile(sh, 'show')).join('')
+    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading podcasts…' : 'No followed podcasts found.'}</p>`;
+
   view.innerHTML = `
-    <div class="spotify-now-playing">
-      ${art}
-      <div class="spotify-track-name">${s.trackName || 'Nothing playing'}</div>
-      <div class="spotify-artist-name">${s.artistName || ''}</div>
-      ${s.deviceName ? `<div class="spotify-device">Playing on: ${s.deviceName}</div>` : ''}
-      ${!playingHere && spotifyDeviceId ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play on this speaker</button>' : ''}
-      <div class="spotify-controls">
-        <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
-        <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
-        <button id="spotify-next" class="radio-btn" title="Next">⏭</button>
-      </div>
-      <div class="spotify-volume">
-        <button id="spotify-vol-down" class="radio-btn" title="Volume down">−</button>
-        <span id="spotify-vol-pct">${s.volumePercent != null ? `${s.volumePercent}%` : '—'}</span>
-        <button id="spotify-vol-up" class="radio-btn" title="Volume up">+</button>
-      </div>
+    ${spotifyNowPlayingBar()}
+    <div class="spotify-lib-section">
+      <div class="spotify-lib-title">Your Playlists</div>
+      <div class="spotify-lib-grid">${playlistsHtml}</div>
+    </div>
+    <div class="spotify-lib-section">
+      <div class="spotify-lib-title">Your Podcasts</div>
+      <div class="spotify-lib-grid">${showsHtml}</div>
     </div>`;
 }
 
@@ -852,12 +999,23 @@ document.getElementById('radio-mute-btn').addEventListener('click', toggleMute);
 document.getElementById('radio-stop-btn').addEventListener('click', stopRadio);
 
 document.getElementById('view-spotify').addEventListener('click', (e) => {
-  if (e.target.id === 'spotify-play-here') spotifyPlayHere();
-  else if (e.target.id === 'spotify-playpause') spotifyPlayPause();
-  else if (e.target.id === 'spotify-next') spotifyNext();
-  else if (e.target.id === 'spotify-prev') spotifyPrev();
-  else if (e.target.id === 'spotify-vol-down') spotifyVolume(-10);
-  else if (e.target.id === 'spotify-vol-up') spotifyVolume(10);
+  if (e.target.id === 'spotify-play-here') return spotifyPlayHere();
+  if (e.target.id === 'spotify-playpause') return spotifyPlayPause();
+  if (e.target.id === 'spotify-next') return spotifyNext();
+  if (e.target.id === 'spotify-prev') return spotifyPrev();
+  if (e.target.id === 'spotify-vol-down') return spotifyVolume(-10);
+  if (e.target.id === 'spotify-vol-up') return spotifyVolume(10);
+  if (e.target.id === 'spotify-back') return closeSpotifyShow();
+
+  const episode = e.target.closest('.spotify-episode');
+  if (episode) return spotifyPlayEpisode(episode.dataset.uri);
+
+  const tile = e.target.closest('.spotify-tile');
+  if (tile) {
+    if (tile.dataset.kind === 'playlist') return spotifyPlayPlaylist(tile.dataset.uri);
+    const show = spotifyLibrary.shows.find((sh) => sh.id === tile.dataset.id);
+    return openSpotifyShow(tile.dataset.id, show ? show.name : '');
+  }
 });
 
 renderRadioTab();

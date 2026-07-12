@@ -31,7 +31,8 @@
   "spotify": {
     "clientId": "your-spotify-app-client-id",
     "clientSecret": "your-spotify-app-client-secret",
-    "redirectUri": "http://TOUCHSCREEN_PI_IP:8080/api/spotify/callback"
+    "_comment": "Spotify requires this to be HTTPS or exactly http://127.0.0.1:<port>/... (loopback literal, not 'localhost' or a LAN IP) - so the one-time login has to be done in a browser running on the touchscreen Pi itself, not a phone/laptop.",
+    "redirectUri": "http://127.0.0.1:8080/api/spotify/callback"
   },
   "notifications": {
     "ntfyUrl": "https://ntfy.sh/your-unique-topic-name"
