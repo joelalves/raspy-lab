@@ -538,7 +538,6 @@ document.getElementById('log-modal').addEventListener('click', (e) => {
 // long hold (with a visible fill so you can see it coming and back out early)
 // is the deliberate safeguard against a stray touch on the kiosk screen.
 const HOLD_MS = 1500;
-const TAP_MS = 300;
 let jenkinsHold = null; // { jobName, startedAt, timer, fillEl, triggered }
 
 function startJenkinsHold(row) {
@@ -561,18 +560,19 @@ function startJenkinsHold(row) {
 
 function endJenkinsHold() {
   if (!jenkinsHold) return;
-  const { jobName, startedAt, triggered, fillEl, timer } = jenkinsHold;
+  const { jobName, triggered, fillEl, timer } = jenkinsHold;
   clearTimeout(timer);
   jenkinsHold = null;
-  if (triggered) return; // already firing/fired - handled in triggerJenkinsBuild
+  if (triggered) return; // full hold already fired the build - handled in triggerJenkinsBuild
   if (fillEl) {
     fillEl.style.transition = 'width 150ms ease-out';
     fillEl.style.width = '0%';
   }
-  if (Date.now() - startedAt < TAP_MS) {
-    showLogModal(jobName, `/api/jenkins/${encodeURIComponent(jobName)}/log`);
-  }
-  // released between TAP_MS and HOLD_MS: treated as an aborted hold, no action
+  // Any release before the full HOLD_MS - whether a quick tap or a longer
+  // press that didn't quite reach the trigger threshold - opens the logs.
+  // The build-trigger safeguard comes entirely from requiring the full
+  // sustained hold, not from timing how "tap-like" the release was.
+  showLogModal(jobName, `/api/jenkins/${encodeURIComponent(jobName)}/log`);
 }
 
 async function triggerJenkinsBuild() {
