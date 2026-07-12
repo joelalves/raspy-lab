@@ -52,8 +52,9 @@ function tempStatus(c) {
   return '';
 }
 
-function statItem(label, value, statusCls, wide) {
-  return `<div class="stat-item${wide ? ' wide' : ''}"><span class="stat-label">${label}</span><span class="stat-value ${statusCls || ''}">${value}</span></div>`;
+function statItem(label, value, statusCls, wide, percent) {
+  const bar = percent == null ? '' : `<div class="stat-bar-track"><div class="stat-bar-fill ${statusCls || ''}" style="width:${Math.max(0, Math.min(100, percent))}%"></div></div>`;
+  return `<div class="stat-item${wide ? ' wide' : ''}"><span class="stat-label">${label}</span><span class="stat-value ${statusCls || ''}">${value}</span>${bar}</div>`;
 }
 
 function renderSystemCard(title, sys) {
@@ -69,10 +70,10 @@ function renderSystemCard(title, sys) {
         ${statItem('Host', sys.hostname, '', true)}
         ${statItem('Model', sys.model || 'n/a', '', true)}
         ${statItem('OS', sys.osName || 'n/a', '', true)}
-        ${statItem('CPU temp', tempVal, tempStatus(sys.cpuTempC))}
+        ${statItem('CPU temp', tempVal, tempStatus(sys.cpuTempC), false, sys.cpuTempC != null ? (sys.cpuTempC / 90) * 100 : null)}
         ${statItem('Load (1m)', sys.loadAvg[0].toFixed(2))}
-        ${statItem('Memory', `${sys.memory.percent}%`, pctStatus(sys.memory.percent))}
-        ${statItem('Disk', diskVal, sys.disk ? pctStatus(sys.disk.percent) : '')}
+        ${statItem('Memory', `${sys.memory.percent}%`, pctStatus(sys.memory.percent), false, sys.memory.percent)}
+        ${statItem('Disk', diskVal, sys.disk ? pctStatus(sys.disk.percent) : '', false, sys.disk ? sys.disk.percent : null)}
         ${statItem('Uptime', formatUptime(sys.uptimeSeconds))}
       </div>
     </div>`;
@@ -172,22 +173,33 @@ function renderDocker(section) {
       const meta = c.state === 'running'
         ? `CPU ${c.cpuPercent}% · Mem ${c.memPercent}% (${formatBytes(c.memUsage)})`
         : c.state;
-      return `<div class="card has-logs" data-container-id="${c.id}" data-container-name="${c.name}"><span class="dot ${c.status}"></span><span class="name">${c.name}</span><span class="meta">${meta}</span></div>`;
+      // Bottom strip shows whichever of CPU/mem is higher, so a hot container
+      // is visible at a glance without reading the numbers.
+      const util = c.state === 'running' ? Math.max(c.cpuPercent, c.memPercent) : 0;
+      const utilBar = c.state === 'running'
+        ? `<div class="card-util-bar"><div class="card-util-bar-fill ${pctStatus(util)}" style="width:${Math.min(util, 100)}%"></div></div>`
+        : '';
+      return `<div class="card has-logs" data-container-id="${c.id}" data-container-name="${c.name}"><span class="dot ${c.status}"></span><span class="name">${c.name}</span><span class="meta">${meta}</span>${utilBar}</div>`;
     })
     .join('');
+}
+
+function formatBuildResult(result) {
+  if (!result) return null;
+  return result.charAt(0) + result.slice(1).toLowerCase(); // SUCCESS -> Success
 }
 
 function renderJenkins(section) {
   if (section.error) return `<div class="error-msg">${section.error}</div>`;
   if (!section.jobs.length) return `<div class="empty">No Jenkins jobs found.</div>`;
   return section.jobs
-    .map((j) =>
-      card(
-        j.name,
-        j.building ? 'building…' : `#${j.lastBuildNumber ?? '—'} · ${formatAgo(j.lastBuildTimestamp)} · ${formatDuration(j.lastBuildDuration)}`,
-        j.status
-      )
-    )
+    .map((j) => {
+      const result = formatBuildResult(j.lastBuildResult);
+      const meta = j.building
+        ? 'Building…'
+        : `${result ? `${result} · ` : ''}#${j.lastBuildNumber ?? '—'} · ${formatAgo(j.lastBuildTimestamp)} · ${formatDuration(j.lastBuildDuration)}`;
+      return card(j.name, meta, j.status);
+    })
     .join('');
 }
 

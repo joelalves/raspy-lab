@@ -137,6 +137,7 @@ async function refreshJenkins() {
       url: j.url,
       building: !!(j.lastBuild && j.lastBuild.building),
       lastBuildNumber: j.lastBuild ? j.lastBuild.number : null,
+      lastBuildResult: j.lastBuild ? j.lastBuild.result : null,
       lastBuildTimestamp: j.lastBuild ? j.lastBuild.timestamp : null,
       lastBuildDuration: j.lastBuild ? j.lastBuild.duration : null,
       status: jenkinsColorToStatus(j.color),
