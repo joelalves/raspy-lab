@@ -302,6 +302,13 @@ main {
 .card-util-bar-fill.warning { background: var(--warning); }
 .card-util-bar-fill.critical { background: var(--critical); }
 
+/* Jenkins long-press-to-build indicator: starts invisible (unlike the Docker
+   utilization bar, which always shows a live value), fills only while held. */
+.card-util-bar-fill.hold-progress {
+  width: 0%;
+  background: var(--cat-blue);
+}
+
 .card .name {
   font-size: 18px;
   font-weight: 600;

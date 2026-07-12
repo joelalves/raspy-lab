@@ -551,6 +551,56 @@ app.get('/api/docker/:id/logs', requireApiKey, async (req, res) => {
   }
 });
 
+// Jenkins requires a CSRF crumb on POST requests (build triggers) unless CSRF
+// protection is disabled on the instance - fetch one per trigger rather than
+// caching it, since crumbs can be tied to the session and Jenkins is cheap to
+// ask. Missing crumbIssuer (CSRF disabled) is not an error - just skip it.
+async function getJenkinsCrumb(url, authHeader) {
+  try {
+    const data = await fetchJson(`${url}/crumbIssuer/api/json`, { headers: { Authorization: authHeader } });
+    return { field: data.crumbRequestField, value: data.crumb };
+  } catch {
+    return null;
+  }
+}
+
+// A real write action - the only one in this dashboard. Long-press-to-confirm
+// on the frontend is the safeguard against a stray tap on the touchscreen.
+app.post('/api/jenkins/:jobName/build', requireApiKey, async (req, res) => {
+  const { url, user, apiToken } = config.jenkins || {};
+  if (!url) return res.status(503).json({ error: 'not configured' });
+  try {
+    const authHeader = `Basic ${Buffer.from(`${user}:${apiToken}`).toString('base64')}`;
+    const headers = { Authorization: authHeader };
+    const crumb = await getJenkinsCrumb(url, authHeader);
+    if (crumb) headers[crumb.field] = crumb.value;
+    const jobPath = encodeURIComponent(req.params.jobName);
+    const buildRes = await fetch(`${url}/job/${jobPath}/build`, { method: 'POST', headers });
+    if (!buildRes.ok) {
+      const body = await buildRes.text().catch(() => '');
+      throw new Error(`${buildRes.status} ${buildRes.statusText}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.get('/api/jenkins/:jobName/log', requireApiKey, async (req, res) => {
+  const { url, user, apiToken } = config.jenkins || {};
+  if (!url) return res.status(503).json({ error: 'not configured' });
+  try {
+    const authHeader = `Basic ${Buffer.from(`${user}:${apiToken}`).toString('base64')}`;
+    const jobPath = encodeURIComponent(req.params.jobName);
+    const logRes = await fetch(`${url}/job/${jobPath}/lastBuild/consoleText`, { headers: { Authorization: authHeader } });
+    if (!logRes.ok) throw new Error(`${logRes.status} ${logRes.statusText}`);
+    const text = await logRes.text();
+    res.json({ lines: text.split('\n').filter(Boolean) });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`dashboard listening on :${PORT}`);
 });

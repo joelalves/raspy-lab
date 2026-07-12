@@ -48,7 +48,9 @@ weather, and push notifications on outage/recovery.
 
 Jenkins, SonarQube, Pi-hole, and Shelly need no changes — the dashboard talks
 to their existing REST APIs directly. Just create:
-- A Jenkins API token (your user → Configure → API Token).
+- A Jenkins API token (your user → Configure → API Token). Needs **build
+  permission** on the jobs you want to trigger from the kiosk, not just read
+  — see "Jenkins: view logs and trigger builds" below.
 - A SonarQube user token (My Account → Security → Generate Token).
 - Nothing to create for Pi-hole (v6) — just its URL and your existing admin
   password. The dashboard logs into Pi-hole's own session-based API the same
@@ -190,6 +192,21 @@ not part of the regular poll cycle — `server-agent` demuxes Docker's raw log
 stream format, the dashboard proxies the request through its own (optional)
 auth, and nothing is ever written or restarted.
 
+### Jenkins: view logs and trigger builds
+
+Tap a job on the Jenkins tab to view its last build's console log, in the
+same modal as Docker's. **Hold a job for 1.5 seconds** (a blue progress bar
+fills across the row) to trigger a new build — this is the only *write*
+action anywhere in this dashboard, everything else is strictly read-only by
+design. The long hold, with visible fill, is the deliberate guard against a
+stray touch on the kiosk screen accidentally kicking off a build: release
+early and nothing happens, and there's no confirmation dialog to accidentally
+tap through.
+
+This needs your Jenkins API token to have build permission (not just read).
+Jenkins CSRF protection is handled automatically (the dashboard fetches a
+crumb before POSTing), whether or not your instance has it enabled.
+
 ### Push notifications on outage/recovery
 
 Set `notifications.ntfyUrl` in `dashboard/config.json` to a
@@ -281,9 +298,11 @@ Google Maps to see its lat/long), then restart the dashboard:
 
 ## Notes
 
-- Everything is read-only/visibility-only by design — no start/stop/restart
-  actions are exposed, since the touchscreen Pi is meant purely as a status
-  monitor.
+- Everything is read-only/visibility-only, **except** triggering a Jenkins
+  build (see "Jenkins: view logs and trigger builds" above) — that's the one
+  deliberate exception, guarded by a 1.5s hold. Every other integration
+  (Docker, Postgres, Pi-hole, Shelly, SonarQube) has no write path at all,
+  since the touchscreen Pi is otherwise meant purely as a status monitor.
 - The dashboard server polls its sources every `refreshIntervalSeconds`
   (default 10s) and caches the result, so the browser itself just polls the
   local `/api/data` endpoint every 8s — cheap even on a Pi Zero. The refresh
