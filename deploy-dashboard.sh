@@ -2,6 +2,15 @@
 # Copies the dashboard/ app to another local folder, excluding node_modules,
 # secrets (config.json), and runtime data (history file) - the same things
 # dashboard/.gitignore excludes. Safe to re-run; only touches the destination.
+#
+# This is a bash script (uses ${BASH_SOURCE[0]} and set -o pipefail, neither
+# POSIX). Run it as `bash deploy-dashboard.sh ...` or `./deploy-dashboard.sh
+# ...` - NOT `sh deploy-dashboard.sh ...`, since `sh` is usually dash on
+# Debian/Raspberry Pi OS and doesn't understand bash-only syntax.
+if [ -z "$BASH_VERSION" ]; then
+  echo "This script needs bash, not sh. Run: bash $0 <destination-folder>" >&2
+  exit 1
+fi
 
 set -euo pipefail
 
