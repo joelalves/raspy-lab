@@ -323,7 +323,21 @@ function spotifyLibraryTile(item, kind) {
     </div>`;
 }
 
+function updateSpotifyHeaderBadge() {
+  const badge = document.getElementById('spotify-badge');
+  const s = latestSpotify;
+  if (s.trackName) {
+    badge.classList.remove('hidden');
+    document.getElementById('spotify-header-track').textContent = s.trackName;
+    document.getElementById('spotify-header-playpause').textContent = s.isPlaying ? '⏸' : '▶';
+    document.getElementById('spotify-header-vol-pct').textContent = s.volumePercent != null ? `${s.volumePercent}%` : '—';
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
 function renderSpotifyTab() {
+  updateSpotifyHeaderBadge();
   const view = document.getElementById('view-spotify');
   if (!view) return;
   const s = latestSpotify;
@@ -1017,6 +1031,9 @@ document.getElementById('view-spotify').addEventListener('click', (e) => {
     return openSpotifyShow(tile.dataset.id, show ? show.name : '');
   }
 });
+document.getElementById('spotify-header-playpause').addEventListener('click', spotifyPlayPause);
+document.getElementById('spotify-header-vol-down').addEventListener('click', () => spotifyVolume(-10));
+document.getElementById('spotify-header-vol-up').addEventListener('click', () => spotifyVolume(10));
 
 renderRadioTab();
 renderSpotifyTab();

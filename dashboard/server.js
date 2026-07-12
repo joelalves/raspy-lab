@@ -695,7 +695,8 @@ app.get('/api/spotify/login', (req, res) => {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
-    scope: 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state',
+    scope: 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state '
+      + 'playlist-read-private playlist-read-collaborative user-library-read',
     redirect_uri: redirectUri,
     state: spotifyAuthState,
   });

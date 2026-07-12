@@ -135,6 +135,34 @@ header h1 {
 
 #radio-battery.hidden { display: none; }
 
+#spotify-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 14px;
+  margin-right: 6px;
+  border-right: 1px solid var(--border);
+}
+
+#spotify-badge.hidden { display: none; }
+
+#spotify-header-track {
+  font-weight: 600;
+  margin-right: 4px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#spotify-header-vol-pct {
+  min-width: 34px;
+  text-align: center;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
 .radio-btn {
   border: 1px solid var(--border);
   background: transparent;
