@@ -1090,6 +1090,8 @@ footer {
 .spotify-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
+  align-self: center;
   gap: 16px;
   margin-top: 12px;
 }
@@ -1113,6 +1115,8 @@ footer {
 .spotify-volume {
   display: flex;
   align-items: center;
+  justify-content: center;
+  align-self: center;
   gap: 10px;
   margin-top: 8px;
 }

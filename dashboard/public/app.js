@@ -151,9 +151,15 @@ let spotifyLastStartedEpisode = null; // { name, image, showName }
 // one, so that's used instead whenever it's available - poll data is only
 // the source of truth when this device isn't currently the one playing.
 let spotifyLocalState = null; // { isPlaying, trackName, artistName, albumArt } | null
+// Same staleness problem as track info, but for volume: without this,
+// tapping +/- quickly read the same poll-cycle-old volumePercent each time
+// and sent the same target repeatedly, so rapid taps looked like they
+// weren't registering.
+let spotifyLocalVolumePercent = null;
 
 function effectiveSpotify() {
-  return spotifyLocalState ? { ...latestSpotify, ...spotifyLocalState } : latestSpotify;
+  const base = spotifyLocalState ? { ...latestSpotify, ...spotifyLocalState } : latestSpotify;
+  return spotifyLocalVolumePercent != null ? { ...base, volumePercent: spotifyLocalVolumePercent } : base;
 }
 // Your playlists/podcasts, loaded once per session (lazily, the first time
 // the tab has something to show them in) rather than every poll cycle -
@@ -264,8 +270,10 @@ function spotifyPlayHere() {
   spotifyApi('PUT', '', { device_ids: [spotifyDeviceId], play: true });
 }
 function spotifyVolume(delta) {
-  const current = latestSpotify.volumePercent != null ? latestSpotify.volumePercent : 50;
+  const current = effectiveSpotify().volumePercent != null ? effectiveSpotify().volumePercent : 50;
   const next = Math.max(0, Math.min(100, current + delta));
+  spotifyLocalVolumePercent = next;
+  renderSpotifyTab();
   spotifyApi('PUT', `/volume?volume_percent=${next}`);
 }
 
@@ -1011,6 +1019,7 @@ async function refresh() {
 
     latestSpotify = data.spotify || latestSpotify;
     if (!spotifyLocalState) spotifyProgressCapturedAt = Date.now();
+    spotifyLocalVolumePercent = null; // real data has arrived, trust it over our optimistic guess
     renderSpotifyTab();
 
     const order = ['good', 'warning', 'serious', 'critical'];
