@@ -156,7 +156,7 @@ function renderOverview(data) {
       : statItem('Status', sh.error || 'unreachable', sh.status, true)
   );
 
-  return renderWeatherOverviewCard(data.weather) + shTile + phTile + dockerTile + pgTile;
+  return renderWeatherOverviewCard(data.weather) + shTile + phTile + pgTile + dockerTile;
 }
 
 function renderSystemTab(data) {
