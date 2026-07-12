@@ -1017,7 +1017,7 @@ footer {
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 56px;
   padding: 24px 16px;
 }
 
@@ -1028,27 +1028,27 @@ footer {
   flex-direction: column;
   align-items: flex-start;
   text-align: left;
-  gap: 8px;
-  max-width: 420px;
+  gap: 12px;
+  max-width: 560px;
   min-width: 0;
 }
 
 .spotify-playing-art {
-  width: clamp(180px, 20vw, 280px);
-  height: clamp(180px, 20vw, 280px);
+  width: clamp(240px, 32vw, 460px);
+  height: clamp(240px, 32vw, 460px);
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: 20px;
 }
 
-.spotify-playing-art.spotify-art-fallback { font-size: 64px; }
+.spotify-playing-art.spotify-art-fallback { font-size: 96px; }
 
 .spotify-playing-track {
-  font-size: 22px;
+  font-size: 30px;
   font-weight: 700;
 }
 
 .spotify-playing-artist {
-  font-size: 16px;
+  font-size: 20px;
   color: var(--text-secondary);
 }
 
@@ -1066,49 +1066,65 @@ footer {
 }
 
 .spotify-progress-time {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  min-width: 34px;
+  min-width: 38px;
 }
 
 .spotify-progress-track {
   flex: 1;
-  height: 4px;
+  height: 6px;
   background: var(--border);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .spotify-progress-fill {
   height: 100%;
   background: var(--cat-blue);
-  border-radius: 2px;
+  border-radius: 3px;
   transition: width 1s linear;
 }
 
 .spotify-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 16px;
+  margin-top: 12px;
 }
 
 .spotify-controls .radio-btn {
-  font-size: 18px;
-  min-width: 44px;
-  min-height: 44px;
+  font-size: 24px;
+  min-width: 60px;
+  min-height: 60px;
+  border-radius: 12px;
+}
+
+.spotify-controls #spotify-playpause {
+  font-size: 30px;
+  min-width: 72px;
+  min-height: 72px;
+  background: var(--cat-blue);
+  border-color: var(--cat-blue);
+  color: #fff;
 }
 
 .spotify-volume {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-top: 8px;
 }
 
+.spotify-volume .radio-btn {
+  font-size: 18px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .spotify-volume #spotify-vol-pct {
-  min-width: 40px;
+  min-width: 44px;
   text-align: center;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
