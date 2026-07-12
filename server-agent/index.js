@@ -67,6 +67,32 @@ app.get('/api/containers', async (req, res) => {
   }
 });
 
+// Docker's log stream is multiplexed per-frame (8-byte header: 1 byte stream
+// type, 3 reserved, 4 byte big-endian payload length) whenever the container
+// wasn't started with a TTY - which is every container in a typical compose
+// stack. Strip the framing to get plain text lines back.
+function demuxDockerLogs(buffer) {
+  const chunks = [];
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    const size = buffer.readUInt32BE(offset + 4);
+    chunks.push(buffer.slice(offset + 8, offset + 8 + size));
+    offset += 8 + size;
+  }
+  return Buffer.concat(chunks).toString('utf8').split('\n').filter(Boolean);
+}
+
+app.get('/api/containers/:id/logs', async (req, res) => {
+  try {
+    const tail = Math.min(parseInt(req.query.tail, 10) || 100, 500);
+    const container = docker.getContainer(req.params.id);
+    const buffer = await container.logs({ stdout: true, stderr: true, tail, timestamps: true });
+    res.json({ lines: demuxDockerLogs(buffer) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Connection details come from standard PG* env vars (PGHOST, PGPORT, PGUSER,
 // PGPASSWORD, PGDATABASE), which `pg` reads automatically, or DATABASE_URL if
 // set. Not the app's own DB credentials - a dedicated read-only monitoring

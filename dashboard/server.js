@@ -2,6 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { getSystemInfo } = require('./system-info');
+const {
+  worstStatus,
+  jenkinsColorToStatus,
+  sonarStatusToStatus,
+  weatherCodeInfo,
+  pruneHistory,
+  sumEnergyForDay,
+  co2Grams,
+} = require('./lib/pure');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 if (!fs.existsSync(CONFIG_PATH)) {
@@ -12,6 +21,22 @@ const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
 const PORT = process.env.PORT || 8080;
 const REFRESH_MS = (config.refreshIntervalSeconds || 10) * 1000;
+
+// The kiosk browser talks to this app over localhost, so it's always trusted
+// with no key needed (keeps the auto-launch kiosk experience seamless). Any
+// other device on the LAN calling the API directly needs DASHBOARD_API_KEY,
+// if one is set - matches server-agent's AGENT_API_KEY pattern. Unset = open,
+// same as server-agent, for easy initial setup.
+const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY || '';
+function isLoopback(req) {
+  const ip = req.ip || (req.connection && req.connection.remoteAddress) || '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+function requireApiKey(req, res, next) {
+  if (!DASHBOARD_API_KEY || isLoopback(req)) return next();
+  if (req.get('x-api-key') === DASHBOARD_API_KEY) return next();
+  return res.status(401).json({ error: 'unauthorized' });
+}
 
 let cache = {
   generatedAt: null,
@@ -56,11 +81,6 @@ async function fetchJson(url, options = {}, timeoutMs = 5000) {
   }
 }
 
-function worstStatus(statuses) {
-  const order = ['good', 'warning', 'serious', 'critical'];
-  return statuses.reduce((worst, s) => (order.indexOf(s) > order.indexOf(worst) ? s : worst), 'good');
-}
-
 // Logs to stdout (visible via `journalctl -u dashboard.service`), but only on
 // change - so a persistent failure logs once instead of once per poll cycle.
 const lastLogged = {};
@@ -103,16 +123,6 @@ async function refreshDocker() {
   }
 }
 
-function jenkinsColorToStatus(color) {
-  if (!color) return 'warning';
-  const base = color.replace('_anime', '');
-  if (base === 'blue') return 'good';
-  if (base === 'yellow') return 'warning';
-  if (base === 'red') return 'critical';
-  if (base === 'aborted') return 'serious';
-  return 'warning'; // grey/disabled/notbuilt
-}
-
 async function refreshJenkins() {
   const { url, user, apiToken } = config.jenkins || {};
   if (!url) return { status: 'warning', jobs: [], summary: 'not configured', error: 'not configured' };
@@ -140,13 +150,6 @@ async function refreshJenkins() {
     logOnce('jenkins', err.message);
     return { status: 'critical', jobs: [], summary: 'unreachable', error: err.message };
   }
-}
-
-function sonarStatusToStatus(status) {
-  if (status === 'OK') return 'good';
-  if (status === 'WARN') return 'warning';
-  if (status === 'ERROR') return 'critical';
-  return 'warning'; // NONE / unknown
 }
 
 async function refreshSonarQube() {
@@ -187,24 +190,6 @@ async function refreshSonarQube() {
     logOnce('sonarqube', err.message);
     return { status: 'critical', projects: [], summary: 'unreachable', error: err.message };
   }
-}
-
-// WMO weather codes -> [emoji, label]. https://open-meteo.com/en/docs
-const WEATHER_CODES = {
-  0: ['☀️', 'Clear'], 1: ['🌤️', 'Mostly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Overcast'],
-  45: ['🌫️', 'Fog'], 48: ['🌫️', 'Fog'],
-  51: ['🌦️', 'Light drizzle'], 53: ['🌦️', 'Drizzle'], 55: ['🌦️', 'Heavy drizzle'],
-  56: ['🌧️', 'Freezing drizzle'], 57: ['🌧️', 'Freezing drizzle'],
-  61: ['🌧️', 'Light rain'], 63: ['🌧️', 'Rain'], 65: ['🌧️', 'Heavy rain'],
-  66: ['🌧️', 'Freezing rain'], 67: ['🌧️', 'Freezing rain'],
-  71: ['🌨️', 'Light snow'], 73: ['🌨️', 'Snow'], 75: ['🌨️', 'Heavy snow'], 77: ['🌨️', 'Snow grains'],
-  80: ['🌦️', 'Rain showers'], 81: ['🌦️', 'Rain showers'], 82: ['⛈️', 'Violent showers'],
-  85: ['🌨️', 'Snow showers'], 86: ['🌨️', 'Snow showers'],
-  95: ['⛈️', 'Thunderstorm'], 96: ['⛈️', 'Thunderstorm w/ hail'], 99: ['⛈️', 'Thunderstorm w/ hail'],
-};
-
-function weatherCodeInfo(code) {
-  return WEATHER_CODES[code] || ['❓', 'Unknown'];
 }
 
 let resolvedLocation = null; // cached so we only geocode once per process
@@ -430,11 +415,6 @@ function saveShellyHistory() {
   }
 }
 
-function isSameLocalDay(epochMs, ref) {
-  const a = new Date(epochMs);
-  return a.getFullYear() === ref.getFullYear() && a.getMonth() === ref.getMonth() && a.getDate() === ref.getDate();
-}
-
 async function refreshShelly() {
   const { url, carbonIntensityGramsPerKwh } = config.shelly || {};
   const empty = {
@@ -459,16 +439,12 @@ async function refreshShelly() {
     if (!shellyLastPersist || now - shellyLastPersist.at >= SHELLY_PERSIST_INTERVAL_MS) {
       const energyWhDelta = shellyLastPersist ? Math.max(netLifetimeWh - shellyLastPersist.totalWh, 0) : 0;
       shellyHistory.push({ time: now, powerW: currentPowerW, energyWhDelta });
-      const cutoff = now - SHELLY_RETENTION_MS;
-      shellyHistory = shellyHistory.filter((h) => h.time >= cutoff);
+      shellyHistory = pruneHistory(shellyHistory, now - SHELLY_RETENTION_MS);
       shellyLastPersist = { at: now, totalWh: netLifetimeWh };
       saveShellyHistory();
     }
 
-    const today = new Date();
-    const todayConsumedWh = shellyHistory
-      .filter((h) => isSameLocalDay(h.time, today))
-      .reduce((sum, h) => sum + h.energyWhDelta, 0);
+    const todayConsumedWh = sumEnergyForDay(shellyHistory, new Date());
 
     logOnce('shelly', null);
     return {
@@ -477,10 +453,10 @@ async function refreshShelly() {
       voltage,
       overpower,
       todayConsumedWh: Number(todayConsumedWh.toFixed(1)),
-      todayCo2Grams: Number(((todayConsumedWh / 1000) * factor).toFixed(1)),
+      todayCo2Grams: Number(co2Grams(todayConsumedWh, factor).toFixed(1)),
       lifetimeConsumedWh: Number(netLifetimeWh.toFixed(1)),
       lifetimeReturnedWh: Number(lifetimeReturnedWh.toFixed(1)),
-      lifetimeCo2Grams: Number(((netLifetimeWh / 1000) * factor).toFixed(1)),
+      lifetimeCo2Grams: Number(co2Grams(netLifetimeWh, factor).toFixed(1)),
       history: shellyHistory,
       error: null,
     };
@@ -502,6 +478,32 @@ async function refreshWeatherLoop() {
 refreshWeatherLoop();
 setInterval(refreshWeatherLoop, WEATHER_REFRESH_MS);
 
+// Push notification on transitions into/out of 'critical' only - not every
+// 'warning' (e.g. "not configured" for an optional integration isn't worth
+// interrupting someone for). Edge-triggered so it fires once per transition,
+// not once per poll cycle. Uses ntfy.sh: free, no account, just a POST.
+let lastOverallStatus = 'good';
+async function notifyOnTransition(overallStatus, criticalSources) {
+  const ntfyUrl = config.notifications && config.notifications.ntfyUrl;
+  const wasCritical = lastOverallStatus === 'critical';
+  const isCritical = overallStatus === 'critical';
+  lastOverallStatus = overallStatus;
+  if (!ntfyUrl || wasCritical === isCritical) return;
+  try {
+    await fetch(ntfyUrl, {
+      method: 'POST',
+      headers: {
+        Title: 'Server Dashboard',
+        Priority: isCritical ? 'high' : 'default',
+        Tags: isCritical ? 'rotating_light' : 'white_check_mark',
+      },
+      body: isCritical ? `Attention needed: ${criticalSources.join(', ')}` : 'All systems recovered.',
+    });
+  } catch (err) {
+    console.error('[notify] failed to send ntfy notification:', err.message);
+  }
+}
+
 async function refreshAll() {
   const [overview, docker, jenkins, sonarqube, postgres, pihole, shelly] = await Promise.all([
     refreshOverview(),
@@ -513,6 +515,11 @@ async function refreshAll() {
     refreshShelly(),
   ]);
   cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather: weatherCache, postgres, pihole, shelly };
+
+  const statuses = { agent: overview.agent.status, docker: docker.status, jenkins: jenkins.status, sonarqube: sonarqube.status, postgres: postgres.status, pihole: pihole.status, shelly: shelly.status };
+  const overallStatus = worstStatus(Object.values(statuses));
+  const criticalSources = Object.entries(statuses).filter(([, s]) => s === 'critical').map(([name]) => name);
+  await notifyOnTransition(overallStatus, criticalSources);
 }
 
 refreshAll();
@@ -520,12 +527,40 @@ setInterval(refreshAll, REFRESH_MS);
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/api/data', (req, res) => res.json(cache));
-app.post('/api/refresh', async (req, res) => {
+app.get('/api/data', requireApiKey, (req, res) => res.json(cache));
+app.post('/api/refresh', requireApiKey, async (req, res) => {
   await refreshAll();
   res.json(cache);
+});
+
+// Proxies to server-agent so the browser only ever needs to know about the
+// dashboard's own (optional) key, not the agent's - fetched on-demand when a
+// container row is tapped, not part of the regular poll cycle.
+app.get('/api/docker/:id/logs', requireApiKey, async (req, res) => {
+  const { url, apiKey } = config.dockerAgent || {};
+  if (!url) return res.status(503).json({ error: 'not configured' });
+  try {
+    const tail = Math.min(parseInt(req.query.tail, 10) || 100, 500);
+    const data = await fetchJson(`${url}/api/containers/${encodeURIComponent(req.params.id)}/logs?tail=${tail}`, {
+      headers: apiKey ? { 'x-api-key': apiKey } : {},
+    });
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
   console.log(`dashboard listening on :${PORT}`);
 });
+
+// Shelly history is only written to disk every 5 minutes (SD card wear), so
+// a plain systemd stop/restart (e.g. every deploy) can silently drop the most
+// recent unsaved samples. Flush on the way out instead.
+function shutdown(signal) {
+  console.log(`[shutdown] ${signal} received, flushing Shelly history...`);
+  saveShellyHistory();
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -19,7 +19,10 @@
     <header>
       <h1>Server Dashboard</h1>
       <div id="overall-badge">
-        <span class="dot good"></span><span id="overall-text">loading…</span>
+        <span id="agent-badge">
+          <span class="dot good" id="agent-dot"></span>Agent <small id="agent-text"></small>
+        </span>
+        <span class="dot good" id="overall-dot"></span><span id="overall-text">loading…</span>
         <button id="theme-btn" title="Toggle dark mode">🌙</button>
         <button id="refresh-btn" title="Refresh now">⟳</button>
       </div>
@@ -47,6 +50,15 @@
       </main>
     </div>
     <footer id="updated-at">—</footer>
+    <div id="log-modal" class="log-modal hidden">
+      <div class="log-modal-content">
+        <div class="log-modal-header">
+          <span id="log-modal-title"></span>
+          <button id="log-modal-close" title="Close">✕</button>
+        </div>
+        <pre id="log-modal-body"></pre>
+      </div>
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

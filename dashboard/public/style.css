@@ -84,6 +84,20 @@ header h1 {
   color: var(--text-secondary);
 }
 
+#agent-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 14px;
+  margin-right: 6px;
+  border-right: 1px solid var(--border);
+}
+
+#agent-badge small {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 #theme-btn,
 #refresh-btn {
   border: 1px solid var(--border);
@@ -659,4 +673,69 @@ footer {
   color: var(--text-muted);
   border-top: 1px solid var(--border);
   text-align: right;
+}
+
+.card.has-logs {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.log-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.log-modal.hidden { display: none; }
+
+.log-modal-content {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.log-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+#log-modal-close {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  padding: 6px 10px;
+  touch-action: manipulation;
+}
+
+#log-modal-close:active { background: var(--border); }
+
+#log-modal-body {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }

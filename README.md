@@ -1,21 +1,22 @@
 # raspy-lab
 
 A kiosk dashboard for a second Raspberry Pi (with touchscreen) that shows live
-status for the containers, Jenkins builds, and SonarQube quality gates running
-on your existing "server" Pi.
+status for a "server" Pi's Docker containers, Postgres, Jenkins builds, and
+SonarQube quality gates — plus Pi-hole, a Shelly energy monitor, local
+weather, and push notifications on outage/recovery.
 
 ```
-┌────────────────────┐   LAN    ┌──────────────────────────┐
-│   Server Pi        │◄────────┤   Touchscreen Pi          │
-│  (existing)         │         │   (new)                    │
-│  - frontend         │         │  - dashboard/ (Node app)   │
-│  - backend          │         │  - Chromium kiosk mode     │
-│  - jenkins          │         │    showing localhost:8080  │
-│  - sonarqube        │         │                            │
-│  - postgres         │         │                            │
-│  + server-agent  ◄──┼─────────┤ polls :9090, Jenkins :8080,│
-│    (new, read-only) │         │ SonarQube :9000            │
-└────────────────────┘         └──────────────────────────┘
+┌──────────────────────────┐        ┌──────────────────────────┐
+│ Server Pi (existing)     │        │ Touchscreen Pi (new)     │
+│                          │        │                          │
+│ - frontend               │        │ - dashboard/ (Node app)  │
+│ - backend                │        │ - Chromium kiosk mode    │
+│ - jenkins                │  LAN   │                          │
+│ - sonarqube              │        │ Polls server-agent, plus │
+│ - postgres               │        │ Jenkins, SonarQube,      │
+│ - Pi-hole (optional)     │        │ Pi-hole, Shelly, and     │
+│ + server-agent (new)     │        │ Open-Meteo directly.     │
+└──────────────────────────┘        └──────────────────────────┘
 ```
 
 ## 1. Server Pi (existing) — add `server-agent`
@@ -93,10 +94,18 @@ that drives your 3.5"–7" screen.
    sudo reboot
    ```
 
+For subsequent updates, `deploy-dashboard.sh` (repo root) syncs the latest
+`dashboard/` source into a target folder and restarts `dashboard.service` in
+one step — run it on the touchscreen Pi itself, pointed at wherever
+`dashboard.service`'s `WorkingDirectory` is:
+```bash
+./deploy-dashboard.sh /home/<your-username>/raspy-lab/dashboard
+```
+
 After reboot the touchscreen Pi should boot straight into a full-screen,
-auto-refreshing dashboard with five tabs: **Overview**, **Docker**, **Jenkins**,
-**SonarQube**, **Weather**. Each row is a status dot (green/amber/orange/red) +
-name + key metric.
+auto-refreshing dashboard with eight tabs: **Overview**, **System**,
+**Weather**, **Pi-hole**, **Docker**, **Jenkins**, **SonarQube**, **Shelly**.
+Each row is a status dot (green/amber/orange/red) + name + key metric.
 
 ### Screen resolution
 
@@ -118,14 +127,24 @@ precipitation chance. Weather is informational only and doesn't factor into
 the "Attention needed" overall status — it isn't a system that can be
 unhealthy the way a container or build can.
 
+### Header
+
+Two status indicators sit in the top bar, to the left of the theme/refresh
+buttons:
+- **Agent** — whether the dashboard can even reach `server-agent` on the
+  server Pi, and the round-trip latency. Checked separately from container
+  status, since "agent unreachable" (network/agent down) and "container
+  unhealthy" (agent reachable, container itself is broken) need different
+  reactions. Kept in the header (not a tab) since it's infrastructure for
+  everything else, not a service in its own right.
+- **Attention needed (…)** — the worst status across every source; "All
+  systems operational" when everything's good.
+
 ### Overview tab
 
 Shows the things worth checking before diving into a specific tab:
-- **Server agent** — whether the dashboard can even reach `server-agent` on
-  the server Pi, and the round-trip latency. This is checked separately from
-  container status, since "agent unreachable" (network/agent down) and
-  "container unhealthy" (agent reachable, container itself is broken) need
-  different reactions.
+- **Docker** — a quick-glance summary tile ("6/6 healthy"), tap it to jump to
+  the full container list on the **Docker tab**.
 - **PostgreSQL** — actual database health (connects and queries), not just
   "the container is running." Shows active connection count, database size,
   and version when healthy.
@@ -163,6 +182,26 @@ surviving dashboard restarts/reboots. Right after first deploying this, the
 chart will say "not enough history yet" until a few 5-minute samples land —
 that's expected, not a bug.
 
+### Docker container logs
+
+Tap any container row on the Docker tab to open the last 200 log lines in a
+modal (both stdout and stderr, interleaved and timestamped). Fetched on tap,
+not part of the regular poll cycle — `server-agent` demuxes Docker's raw log
+stream format, the dashboard proxies the request through its own (optional)
+auth, and nothing is ever written or restarted.
+
+### Push notifications on outage/recovery
+
+Set `notifications.ntfyUrl` in `dashboard/config.json` to a
+[ntfy.sh](https://ntfy.sh/) topic URL (free, no account — just pick a random,
+hard-to-guess topic name, e.g. `https://ntfy.sh/raspy-lab-a1b2c3d4`, and
+subscribe to it in the ntfy app) to get a push notification the moment any
+source goes `critical`, and another when everything recovers. Edge-triggered
+— it fires once per transition, not once per poll, so a persistent outage
+doesn't spam you. Only the `critical` status triggers a notification, not
+`warning` (e.g. an optional integration you haven't configured yet isn't
+worth interrupting you for).
+
 ### Touch-friendly by design
 
 Since the touchscreen Pi has no keyboard/mouse, navigation is 100% tap-driven:
@@ -173,6 +212,17 @@ Since the touchscreen Pi has no keyboard/mouse, navigation is 100% tap-driven:
 - The header has a manual **⟳ refresh** button that forces an immediate
   refresh of all sources via `POST /api/refresh`, instead of waiting for the
   next automatic poll.
+
+### Tests
+
+The pure logic (status mapping, weather icon lookup, Shelly history pruning
+and CO₂ math, etc.) lives in `dashboard/lib/pure.js`, separate from the parts
+that need a live config/network (`dashboard/server.js`), so it can be unit
+tested on its own with Node's built-in test runner — no extra dependency:
+
+```bash
+cd dashboard && npm test
+```
 
 ## Troubleshooting
 
@@ -243,3 +293,9 @@ Google Maps to see its lat/long), then restart the dashboard:
   `dashboard/server.js` accordingly.
 - Weather temperatures are Celsius. For Fahrenheit, add `&temperature_unit=fahrenheit`
   to the Open-Meteo URL in `refreshWeather()` in `dashboard/server.js`.
+- By default, `/api/data` and `/api/refresh` are open to anything on your LAN
+  (matching `server-agent`'s default). The kiosk browser always talks to the
+  dashboard over `localhost`, so if you want to close that off, set
+  `DASHBOARD_API_KEY` in `dashboard.service` (see its comments) — only
+  non-localhost requests are required to send it, so the kiosk itself is
+  unaffected either way.

@@ -119,17 +119,6 @@ function renderWeatherOverviewCard(weather) {
 }
 
 function renderOverview(data) {
-  const ov = data.overview;
-  const agent = ov.agent;
-  const agentTile = statTile(
-    null,
-    'Server Agent',
-    agent.status,
-    agent.status === 'good'
-      ? statItem('Status', 'Online', '', true) + statItem('Latency', `${agent.latencyMs} ms`, '', true)
-      : statItem('Status', agent.error || 'Unreachable', agent.status, true)
-  );
-
   const docker = data.docker;
   const dockerTile = statTile('docker', 'Docker', docker.status, statItem('Containers', docker.summary, '', true));
 
@@ -167,7 +156,7 @@ function renderOverview(data) {
       : statItem('Status', sh.error || 'unreachable', sh.status, true)
   );
 
-  return renderWeatherOverviewCard(data.weather) + shTile + phTile +agentTile + dockerTile + pgTile;
+  return renderWeatherOverviewCard(data.weather) + shTile + phTile + dockerTile + pgTile;
 }
 
 function renderSystemTab(data) {
@@ -179,15 +168,12 @@ function renderDocker(section) {
   if (section.error) return `<div class="error-msg">${section.error}</div>`;
   if (!section.containers.length) return `<div class="empty">No containers found.</div>`;
   return section.containers
-    .map((c) =>
-      card(
-        c.name,
-        c.state === 'running'
-          ? `CPU ${c.cpuPercent}% · Mem ${c.memPercent}% (${formatBytes(c.memUsage)})`
-          : c.state,
-        c.status
-      )
-    )
+    .map((c) => {
+      const meta = c.state === 'running'
+        ? `CPU ${c.cpuPercent}% · Mem ${c.memPercent}% (${formatBytes(c.memUsage)})`
+        : c.state;
+      return `<div class="card has-logs" data-container-id="${c.id}" data-container-name="${c.name}"><span class="dot ${c.status}"></span><span class="name">${c.name}</span><span class="meta">${meta}</span></div>`;
+    })
     .join('');
 }
 
@@ -211,7 +197,11 @@ function renderSonarQube(section) {
   return section.projects
     .map((p) => {
       const failing = (p.conditions || []).filter((c) => c.status !== 'good');
-      const meta = failing.length ? failing.map((c) => `${c.metric}: ${c.actual}`).join(', ') : 'quality gate passed';
+      const meta = p.error
+        ? p.error
+        : failing.length
+        ? failing.map((c) => `${c.metric}: ${c.actual}`).join(', ')
+        : 'quality gate passed';
       return card(p.name, meta, p.status);
     })
     .join('');
@@ -424,10 +414,14 @@ async function refresh() {
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
     const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status, data.pihole.status, data.shelly.status]);
 
-    const badgeDot = document.querySelector('#overall-badge .dot');
-    badgeDot.className = `dot ${overall}`;
+    document.getElementById('overall-dot').className = `dot ${overall}`;
     document.getElementById('overall-text').textContent =
       overall === 'good' ? 'All systems operational' : `Attention needed (${overall})`;
+
+    const agent = data.overview.agent;
+    document.getElementById('agent-dot').className = `dot ${agent.status}`;
+    document.getElementById('agent-text').textContent =
+      agent.status === 'good' ? `${agent.latencyMs} ms` : agent.error || 'unreachable';
 
     setNavBadge('overview', overall === 'good' ? 'ok' : overall, overall);
     setNavBadge('docker', data.docker.summary, data.docker.status);
@@ -492,6 +486,36 @@ document.querySelectorAll('nav button').forEach((btn) => {
 document.getElementById('view-overview').addEventListener('click', (e) => {
   const tile = e.target.closest('[data-jump]');
   if (tile) switchView(tile.dataset.jump);
+});
+
+async function openLogModal(id, name) {
+  const modal = document.getElementById('log-modal');
+  const title = document.getElementById('log-modal-title');
+  const body = document.getElementById('log-modal-body');
+  title.textContent = name;
+  body.textContent = 'Loading…';
+  modal.classList.remove('hidden');
+  try {
+    const res = await fetch(`/api/docker/${encodeURIComponent(id)}/logs?tail=200`);
+    const data = await res.json();
+    body.textContent = data.lines && data.lines.length ? data.lines.join('\n') : (data.error || 'No log output.');
+    body.scrollTop = body.scrollHeight;
+  } catch (err) {
+    body.textContent = `Failed to load logs: ${err.message}`;
+  }
+}
+
+function closeLogModal() {
+  document.getElementById('log-modal').classList.add('hidden');
+}
+
+document.getElementById('view-docker').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-container-id]');
+  if (row) openLogModal(row.dataset.containerId, row.dataset.containerName);
+});
+document.getElementById('log-modal-close').addEventListener('click', closeLogModal);
+document.getElementById('log-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'log-modal') closeLogModal(); // tap the backdrop to dismiss
 });
 
 refresh();

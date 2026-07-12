@@ -21,6 +21,10 @@ ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=3
 Environment=PORT=8080
+# Optional: require this key from any device that isn't localhost (the kiosk
+# browser itself is always trusted with no key). Leave unset to keep the API
+# fully open on your LAN, matching server-agent's default.
+# Environment=DASHBOARD_API_KEY=change-me-to-a-long-random-string
 
 [Install]
 WantedBy=multi-user.target

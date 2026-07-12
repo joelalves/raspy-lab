@@ -4,7 +4,8 @@
   "description": "Kiosk dashboard for the raspy-lab server Pi - Docker/Jenkins/SonarQube status",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/"
   },
   "dependencies": {
     "express": "^4.19.2"
