@@ -141,12 +141,26 @@ let spotifyLibrary = { playlists: [], shows: [], loaded: false, loading: false }
 let spotifyEpisodesFor = null; // { id, name } of the show currently drilled into, or null
 let spotifyEpisodes = [];
 
+// The kiosk has no accessible devtools, so anything worth debugging also
+// gets posted to the backend (visible via `journalctl -u dashboard.service`)
+// in addition to the browser console (which still helps on a real desktop).
+function logToServer(context, message, detail) {
+  console.error(`[spotify:${context}]`, message, detail || '');
+  fetch('/api/client-log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context: `spotify:${context}`, message, detail }),
+  }).catch(() => {});
+}
+
 async function getSpotifyToken() {
   try {
     const res = await fetch('/api/spotify/token');
     const data = await res.json();
+    if (!data.linked) logToServer('token', 'not linked', JSON.stringify(data));
     spotifyAccessToken = data.accessToken || null;
-  } catch {
+  } catch (err) {
+    logToServer('token', 'failed to fetch access token', err.message);
     spotifyAccessToken = null;
   }
   return spotifyAccessToken;
@@ -165,23 +179,30 @@ window.onSpotifyWebPlaybackSDKReady = () => {
   spotifyPlayer.addListener('not_ready', () => {
     spotifyDeviceId = null;
   });
-  spotifyPlayer.addListener('initialization_error', ({ message }) => console.error('[spotify] init:', message));
-  spotifyPlayer.addListener('authentication_error', ({ message }) => console.error('[spotify] auth:', message));
-  spotifyPlayer.addListener('account_error', ({ message }) => console.error('[spotify] account (Premium required):', message));
+  spotifyPlayer.addListener('initialization_error', ({ message }) => logToServer('sdk-init', message));
+  spotifyPlayer.addListener('authentication_error', ({ message }) => logToServer('sdk-auth', message));
+  spotifyPlayer.addListener('account_error', ({ message }) => logToServer('sdk-account (Premium required)', message));
   spotifyPlayer.connect();
 };
 
 async function spotifyApi(method, path, body) {
   if (!spotifyAccessToken) await getSpotifyToken();
-  if (!spotifyAccessToken) return;
+  if (!spotifyAccessToken) {
+    logToServer('api-call', `skipped ${method} ${path} - no access token`);
+    return;
+  }
   try {
-    await fetch(`https://api.spotify.com/v1/me/player${path}`, {
+    const res = await fetch(`https://api.spotify.com/v1/me/player${path}`, {
       method,
       headers: { Authorization: `Bearer ${spotifyAccessToken}`, 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logToServer('api-call', `${method} ${path} -> ${res.status} ${res.statusText}`, text.slice(0, 300));
+    }
   } catch (err) {
-    console.error('[spotify] control call failed:', err.message);
+    logToServer('api-call', `${method} ${path} threw`, err.message);
   }
 }
 
@@ -206,15 +227,22 @@ function spotifyVolume(delta) {
 
 async function spotifyFetch(path) {
   if (!spotifyAccessToken) await getSpotifyToken();
-  if (!spotifyAccessToken) return null;
+  if (!spotifyAccessToken) {
+    logToServer('library-fetch', `skipped GET ${path} - no access token`);
+    return null;
+  }
   try {
     const res = await fetch(`https://api.spotify.com/v1${path}`, {
       headers: { Authorization: `Bearer ${spotifyAccessToken}` },
     });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logToServer('library-fetch', `GET ${path} -> ${res.status} ${res.statusText}`, text.slice(0, 300));
+      return null;
+    }
     return await res.json();
   } catch (err) {
-    console.error('[spotify] library fetch failed:', err.message);
+    logToServer('library-fetch', `GET ${path} threw`, err.message);
     return null;
   }
 }

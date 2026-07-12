@@ -671,11 +671,21 @@ refreshAll();
 setInterval(refreshAll, REFRESH_MS);
 
 const app = express();
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/data', requireApiKey, (req, res) => res.json(cache));
 app.post('/api/refresh', requireApiKey, async (req, res) => {
   await refreshAll();
   res.json(cache);
+});
+
+// The kiosk has no accessible devtools console, so the frontend posts
+// Spotify (and any other client-side) errors here instead - they show up
+// in `journalctl -u dashboard.service` alongside everything else.
+app.post('/api/client-log', (req, res) => {
+  const { context, message, detail } = req.body || {};
+  console.error(`[client${context ? `:${context}` : ''}] ${message || ''}${detail ? ` - ${detail}` : ''}`);
+  res.json({ ok: true });
 });
 
 // Spotify OAuth: visit /api/spotify/login once from any browser on the LAN
