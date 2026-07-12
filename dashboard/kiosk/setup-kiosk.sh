@@ -20,21 +20,30 @@ fi
 
 KIOSK_CMD="$CHROMIUM_BIN --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --check-for-update-interval=1 --incognito --app=http://localhost:8080"
 
-# Some Pi audio hardware (e.g. an HDMI monitor with built-in speakers) exposes
-# both an HDMI sink and a 3.5mm jack sink, and PipeWire/WirePlumber sometimes
-# defaults to the jack even when nothing is plugged in there. Force the HDMI
-# sink to be default on every login. Looked up by name (not a hardcoded
-# numeric id) because PipeWire reassigns object ids on every boot.
+# Pick the best audio output on every login: prefer a paired Bluetooth
+# speaker if one is connected, otherwise fall back to the HDMI monitor's
+# speakers (some Pi audio hardware exposes both an HDMI sink and a 3.5mm
+# jack sink, and PipeWire/WirePlumber sometimes defaults to the unused
+# jack). Bluetooth reconnection itself is handled separately by the
+# bluetooth-autoconnect systemd user service (see bluetooth-autoconnect.sh/
+# .service at the repo root) - this only picks which resulting sink is
+# default. Looked up by name (not a hardcoded numeric id) because PipeWire
+# reassigns object ids on every boot.
 mkdir -p "$HOME/.config/labwc"
 cat > "$HOME/.config/labwc/hdmi-audio-default.sh" <<'EOF'
 #!/usr/bin/env bash
-# Retry for a few seconds in case PipeWire hasn't enumerated devices yet.
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  HDMI_ID=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "hdmi" | grep -oE '[0-9]+' | head -1)
-  [ -n "$HDMI_ID" ] && break
-  sleep 1
+# Retry for a while in case PipeWire hasn't enumerated the sink yet, or the
+# Bluetooth reconnect (handled by bluetooth-autoconnect.service) hasn't
+# finished.
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  SINK_ID=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "bluez" | grep -oE '[0-9]+' | head -1)
+  [ -n "$SINK_ID" ] && break
+  sleep 2
 done
-[ -n "$HDMI_ID" ] && wpctl set-default "$HDMI_ID"
+if [ -z "$SINK_ID" ]; then
+  SINK_ID=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "hdmi" | grep -oE '[0-9]+' | head -1)
+fi
+[ -n "$SINK_ID" ] && wpctl set-default "$SINK_ID"
 EOF
 chmod +x "$HOME/.config/labwc/hdmi-audio-default.sh"
 

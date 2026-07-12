@@ -1,0 +1,29 @@
+# Install as a USER service, not a system one - the Bluetooth audio profile
+# has to be negotiated with your user's PipeWire/WirePlumber instance, which
+# only exists once your desktop session has started. A system service
+# (multi-user.target) can run before that and connect at the BlueZ level
+# with no audio sink ever appearing.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp bluetooth-autoconnect.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bluetooth-autoconnect.service
+#
+# On a kiosk Pi with desktop autologin this is enough. If you ever switch to
+# a headless/SSH-only login, also run this once so the user service starts
+# at boot without an interactive login:
+#   sudo loginctl enable-linger $USER
+
+[Unit]
+Description=Connect Bluetooth speaker automatically
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bluetooth-autoconnect.sh
+Restart=on-failure
+RestartSec=15
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
