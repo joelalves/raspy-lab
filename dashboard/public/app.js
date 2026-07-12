@@ -138,10 +138,11 @@ let latestSpotify = {
 // the tab has something to show them in) rather than every poll cycle -
 // this is a browse action, not live status like everything else on /api/data.
 let spotifyLibrary = { playlists: [], shows: [], loaded: false, loading: false };
-let spotifyEpisodesFor = null; // { id, name } of the show currently drilled into, or null
-let spotifyEpisodes = [];
-let spotifyPlaylistFor = null; // { id, name, uri } of the playlist currently drilled into, or null
+let spotifySubTab = 'playing'; // 'playing' | 'playlists' | 'podcasts'
+let spotifySelectedPlaylistId = null;
 let spotifyPlaylistTracks = [];
+let spotifySelectedShowId = null;
+let spotifyEpisodes = [];
 
 // The kiosk has no accessible devtools, so anything worth debugging also
 // gets posted to the backend (visible via `journalctl -u dashboard.service`)
@@ -256,48 +257,35 @@ async function loadSpotifyLibrary() {
     spotifyFetch('/me/playlists?limit=30'),
     spotifyFetch('/me/shows?limit=30'),
   ]);
-  spotifyLibrary = {
-    playlists: ((playlistsRes && playlistsRes.items) || []).filter(Boolean).map((p) => ({
-      id: p.id,
-      name: p.name,
-      image: p.images && p.images[0] && p.images[0].url,
-      uri: p.uri,
-    })),
-    shows: ((showsRes && showsRes.items) || []).map((entry) => entry.show).filter(Boolean).map((s) => ({
+  const playlists = ((playlistsRes && playlistsRes.items) || []).filter(Boolean).map((p) => ({
+    id: p.id,
+    name: p.name,
+    image: p.images && p.images[0] && p.images[0].url,
+    uri: p.uri,
+  }));
+  const showEntries = ((showsRes && showsRes.items) || []).filter(Boolean);
+  // Sorted by newest episode, not by follow date - so shows with fresh
+  // content float to the top, like a podcast app inbox. Costs one extra
+  // request per show (just the latest episode), done in parallel.
+  const shows = await Promise.all(showEntries.map(async (entry) => {
+    const s = entry.show;
+    const epData = await spotifyFetch(`/shows/${s.id}/episodes?limit=1`);
+    const latest = epData && epData.items && epData.items[0];
+    return {
       id: s.id,
       name: s.name,
       publisher: s.publisher,
       image: s.images && s.images[0] && s.images[0].url,
-    })),
-    loaded: true,
-    loading: false,
-  };
-  renderSpotifyTab();
-}
-
-async function openSpotifyShow(id, name) {
-  spotifyEpisodesFor = { id, name };
-  spotifyEpisodes = [];
-  renderSpotifyTab();
-  const data = await spotifyFetch(`/shows/${id}/episodes?limit=30`);
-  spotifyEpisodes = ((data && data.items) || []).filter(Boolean).map((e) => ({
-    name: e.name,
-    uri: e.uri,
-    image: e.images && e.images[0] && e.images[0].url,
-    releaseDate: e.release_date,
-    durationMs: e.duration_ms,
+      latestEpisodeDate: latest ? latest.release_date : null,
+    };
   }));
+  shows.sort((a, b) => (b.latestEpisodeDate || '').localeCompare(a.latestEpisodeDate || ''));
+  spotifyLibrary = { playlists, shows, loaded: true, loading: false };
   renderSpotifyTab();
 }
 
-function closeSpotifyShow() {
-  spotifyEpisodesFor = null;
-  spotifyEpisodes = [];
-  renderSpotifyTab();
-}
-
-async function openSpotifyPlaylist(id, uri, name) {
-  spotifyPlaylistFor = { id, uri, name };
+async function selectSpotifyPlaylist(id) {
+  spotifySelectedPlaylistId = id;
   spotifyPlaylistTracks = [];
   renderSpotifyTab();
   const data = await spotifyFetch(`/playlists/${id}/tracks?limit=50`);
@@ -310,9 +298,17 @@ async function openSpotifyPlaylist(id, uri, name) {
   renderSpotifyTab();
 }
 
-function closeSpotifyPlaylist() {
-  spotifyPlaylistFor = null;
-  spotifyPlaylistTracks = [];
+async function selectSpotifyShow(id) {
+  spotifySelectedShowId = id;
+  spotifyEpisodes = [];
+  renderSpotifyTab();
+  const data = await spotifyFetch(`/shows/${id}/episodes?limit=30`);
+  spotifyEpisodes = ((data && data.items) || []).filter(Boolean).map((e) => ({
+    name: e.name,
+    uri: e.uri,
+    image: e.images && e.images[0] && e.images[0].url,
+    releaseDate: e.release_date,
+  }));
   renderSpotifyTab();
 }
 
@@ -321,11 +317,15 @@ function closeSpotifyPlaylist() {
 // browsing playlists/podcasts from here instead of your phone. The Web
 // Playback SDK's device only becomes ready a few seconds after the page
 // loads, so a tap right after opening the tab retries quietly for a while
-// instead of immediately complaining.
+// instead of immediately complaining. Jumps to the Now Playing sub-tab once
+// the call actually goes out, so starting something is always followed by
+// seeing it play.
 function spotifyPlayOnThisDevice(body, attempt) {
   attempt = attempt || 0;
   if (spotifyDeviceId) {
     spotifyApi('PUT', `/play?device_id=${spotifyDeviceId}`, body);
+    spotifySubTab = 'playing';
+    renderSpotifyTab();
     return;
   }
   if (attempt >= 10) {
@@ -345,20 +345,42 @@ function spotifyPlayTrackInPlaylist(playlistUri, trackUri) {
   spotifyPlayOnThisDevice({ context_uri: playlistUri, offset: { uri: trackUri } });
 }
 
-function spotifyNowPlayingBar() {
+function spotifySplitItem(item, fallbackIcon) {
+  const img = item.image
+    ? `<img class="spotify-split-item-art" src="${item.image}" alt="">`
+    : `<div class="spotify-split-item-art spotify-art-fallback">${fallbackIcon}</div>`;
+  return `
+    <div class="spotify-split-item${item.active ? ' active' : ''}" data-id="${item.id}">
+      ${img}
+      <div class="spotify-split-item-name">${item.name}</div>
+    </div>`;
+}
+
+function spotifyEpisodeRow(item) {
+  return `
+    <div class="spotify-episode" data-uri="${item.uri}">
+      ${item.image ? `<img class="spotify-episode-art" src="${item.image}" alt="">` : `<div class="spotify-episode-art spotify-art-fallback">${item.fallbackIcon}</div>`}
+      <div class="spotify-episode-info">
+        <div class="spotify-episode-name">${item.name}</div>
+        <div class="spotify-tile-sub">${item.sub || ''}</div>
+      </div>
+      <div class="spotify-episode-play">▶</div>
+    </div>`;
+}
+
+function renderSpotifyPlayingTab() {
   const s = latestSpotify;
   const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
   const art = s.albumArt
-    ? `<img class="spotify-bar-art" src="${s.albumArt}" alt="">`
-    : '<div class="spotify-bar-art spotify-art-fallback">🎵</div>';
+    ? `<img class="spotify-playing-art" src="${s.albumArt}" alt="">`
+    : '<div class="spotify-playing-art spotify-art-fallback">🎵</div>';
   return `
-    <div class="spotify-bar">
+    <div class="spotify-playing-tab">
       ${art}
-      <div class="spotify-bar-info">
-        <div class="spotify-track-name">${s.trackName || 'Nothing playing'}</div>
-        <div class="spotify-artist-name">${s.artistName || ''}</div>
-        ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
-      </div>
+      <div class="spotify-playing-track">${s.trackName || 'Nothing playing'}</div>
+      <div class="spotify-playing-artist">${s.artistName || ''}</div>
+      ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
+      ${!playingHere && spotifyDeviceId && s.trackName ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play here instead</button>' : ''}
       <div class="spotify-controls">
         <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
         <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
@@ -369,20 +391,61 @@ function spotifyNowPlayingBar() {
         <span id="spotify-vol-pct">${s.volumePercent != null ? `${s.volumePercent}%` : '—'}</span>
         <button id="spotify-vol-up" class="radio-btn" title="Volume up">+</button>
       </div>
-      ${!playingHere && spotifyDeviceId && s.trackName ? '<button id="spotify-play-here" class="spotify-btn-primary spotify-bar-transfer">▶ Play here instead</button>' : ''}
     </div>`;
 }
 
-function spotifyLibraryTile(item, kind) {
-  const img = item.image
-    ? `<img class="spotify-tile-art" src="${item.image}" alt="">`
-    : `<div class="spotify-tile-art spotify-art-fallback">${kind === 'show' ? '🎙️' : '🎵'}</div>`;
-  return `
-    <div class="spotify-tile" data-kind="${kind}" data-id="${item.id}" data-uri="${item.uri || ''}">
-      ${img}
-      <div class="spotify-tile-name">${item.name}</div>
-      ${item.publisher ? `<div class="spotify-tile-sub">${item.publisher}</div>` : ''}
-    </div>`;
+function renderSpotifyPlaylistsTab() {
+  const sidebar = spotifyLibrary.playlists.length
+    ? spotifyLibrary.playlists.map((p) => spotifySplitItem({ ...p, active: p.id === spotifySelectedPlaylistId }, '🎵')).join('')
+    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading…' : 'No playlists found.'}</p>`;
+
+  let main = '<p class="spotify-lib-empty">Select a playlist to see its tracks.</p>';
+  if (spotifySelectedPlaylistId) {
+    const playlist = spotifyLibrary.playlists.find((p) => p.id === spotifySelectedPlaylistId);
+    const tracks = spotifyPlaylistTracks.length
+      ? spotifyPlaylistTracks.map((t) => spotifyEpisodeRow({ ...t, sub: t.artistName, fallbackIcon: '🎵' })).join('')
+      : '<p class="spotify-lib-empty">Loading tracks…</p>';
+    main = `
+      <div class="spotify-lib-header">
+        <div class="spotify-lib-title">${playlist ? playlist.name : ''}</div>
+        <button id="spotify-play-all" class="spotify-btn-primary" data-uri="${playlist ? playlist.uri : ''}">▶ Play All</button>
+      </div>
+      <div class="spotify-episode-list">${tracks}</div>`;
+  }
+
+  return `<div class="spotify-split"><div class="spotify-split-sidebar">${sidebar}</div><div class="spotify-split-main">${main}</div></div>`;
+}
+
+function renderSpotifyPodcastsTab() {
+  const sidebar = spotifyLibrary.shows.length
+    ? spotifyLibrary.shows.map((sh) => spotifySplitItem({ ...sh, active: sh.id === spotifySelectedShowId }, '🎙️')).join('')
+    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading…' : 'No followed podcasts found.'}</p>`;
+
+  let main = '<p class="spotify-lib-empty">Select a podcast to see its episodes.</p>';
+  if (spotifySelectedShowId) {
+    const show = spotifyLibrary.shows.find((sh) => sh.id === spotifySelectedShowId);
+    const episodes = spotifyEpisodes.length
+      ? spotifyEpisodes.map((e) => spotifyEpisodeRow({ ...e, sub: e.releaseDate, fallbackIcon: '🎙️' })).join('')
+      : '<p class="spotify-lib-empty">Loading episodes…</p>';
+    main = `
+      <div class="spotify-lib-header">
+        <div class="spotify-lib-title">${show ? show.name : ''}</div>
+      </div>
+      <div class="spotify-episode-list">${episodes}</div>`;
+  }
+
+  return `<div class="spotify-split"><div class="spotify-split-sidebar">${sidebar}</div><div class="spotify-split-main">${main}</div></div>`;
+}
+
+function spotifySubNav() {
+  const tabs = [
+    ['playing', 'Now Playing'],
+    ['playlists', 'Playlists'],
+    ['podcasts', 'Podcasts'],
+  ];
+  return `<div class="spotify-subnav">${tabs.map(([id, label]) =>
+    `<button class="spotify-subnav-btn${spotifySubTab === id ? ' active' : ''}" data-subtab="${id}">${label}</button>`
+  ).join('')}</div>`;
 }
 
 function updateSpotifyHeaderBadge() {
@@ -415,72 +478,12 @@ function renderSpotifyTab() {
 
   if (!spotifyLibrary.loaded && !spotifyLibrary.loading) loadSpotifyLibrary();
 
-  if (spotifyEpisodesFor) {
-    const list = spotifyEpisodes.length
-      ? spotifyEpisodes.map((e) => `
-          <div class="spotify-episode" data-uri="${e.uri}">
-            ${e.image ? `<img class="spotify-episode-art" src="${e.image}" alt="">` : '<div class="spotify-episode-art spotify-art-fallback">🎙️</div>'}
-            <div class="spotify-episode-info">
-              <div class="spotify-episode-name">${e.name}</div>
-              <div class="spotify-tile-sub">${e.releaseDate || ''}</div>
-            </div>
-            <div class="spotify-episode-play">▶</div>
-          </div>`).join('')
-      : '<p class="spotify-lib-empty">Loading episodes…</p>';
-    view.innerHTML = `
-      ${spotifyNowPlayingBar()}
-      <div class="spotify-lib-section">
-        <div class="spotify-lib-header">
-          <button id="spotify-back" class="radio-btn" title="Back">←</button>
-          <div class="spotify-lib-title">${spotifyEpisodesFor.name}</div>
-        </div>
-        <div class="spotify-episode-list">${list}</div>
-      </div>`;
-    return;
-  }
+  let body;
+  if (spotifySubTab === 'playlists') body = renderSpotifyPlaylistsTab();
+  else if (spotifySubTab === 'podcasts') body = renderSpotifyPodcastsTab();
+  else body = renderSpotifyPlayingTab();
 
-  if (spotifyPlaylistFor) {
-    const list = spotifyPlaylistTracks.length
-      ? spotifyPlaylistTracks.map((t) => `
-          <div class="spotify-episode" data-uri="${t.uri}">
-            ${t.image ? `<img class="spotify-episode-art" src="${t.image}" alt="">` : '<div class="spotify-episode-art spotify-art-fallback">🎵</div>'}
-            <div class="spotify-episode-info">
-              <div class="spotify-episode-name">${t.name}</div>
-              <div class="spotify-tile-sub">${t.artistName || ''}</div>
-            </div>
-            <div class="spotify-episode-play">▶</div>
-          </div>`).join('')
-      : '<p class="spotify-lib-empty">Loading tracks…</p>';
-    view.innerHTML = `
-      ${spotifyNowPlayingBar()}
-      <div class="spotify-lib-section">
-        <div class="spotify-lib-header">
-          <button id="spotify-back" class="radio-btn" title="Back">←</button>
-          <div class="spotify-lib-title">${spotifyPlaylistFor.name}</div>
-          <button id="spotify-play-all" class="spotify-btn-primary">▶ Play All</button>
-        </div>
-        <div class="spotify-episode-list">${list}</div>
-      </div>`;
-    return;
-  }
-
-  const playlistsHtml = spotifyLibrary.playlists.length
-    ? spotifyLibrary.playlists.map((p) => spotifyLibraryTile(p, 'playlist')).join('')
-    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading playlists…' : 'No playlists found.'}</p>`;
-  const showsHtml = spotifyLibrary.shows.length
-    ? spotifyLibrary.shows.map((sh) => spotifyLibraryTile(sh, 'show')).join('')
-    : `<p class="spotify-lib-empty">${spotifyLibrary.loading ? 'Loading podcasts…' : 'No followed podcasts found.'}</p>`;
-
-  view.innerHTML = `
-    ${spotifyNowPlayingBar()}
-    <div class="spotify-lib-section">
-      <div class="spotify-lib-title">Your Playlists</div>
-      <div class="spotify-lib-grid">${playlistsHtml}</div>
-    </div>
-    <div class="spotify-lib-section">
-      <div class="spotify-lib-title">Your Podcasts</div>
-      <div class="spotify-lib-grid">${showsHtml}</div>
-    </div>`;
+  view.innerHTML = `${spotifySubNav()}<div class="spotify-subtab-body">${body}</div>`;
 }
 
 function formatBytes(bytes) {
@@ -1106,24 +1109,24 @@ document.getElementById('view-spotify').addEventListener('click', (e) => {
   if (e.target.id === 'spotify-prev') return spotifyPrev();
   if (e.target.id === 'spotify-vol-down') return spotifyVolume(-10);
   if (e.target.id === 'spotify-vol-up') return spotifyVolume(10);
-  if (e.target.id === 'spotify-back') return spotifyPlaylistFor ? closeSpotifyPlaylist() : closeSpotifyShow();
-  if (e.target.id === 'spotify-play-all') return spotifyPlayPlaylist(spotifyPlaylistFor.uri);
+  if (e.target.id === 'spotify-play-all') return spotifyPlayPlaylist(e.target.dataset.uri);
+
+  const subtabBtn = e.target.closest('.spotify-subnav-btn');
+  if (subtabBtn) {
+    spotifySubTab = subtabBtn.dataset.subtab;
+    return renderSpotifyTab();
+  }
 
   const episode = e.target.closest('.spotify-episode');
   if (episode) {
-    return spotifyPlaylistFor
-      ? spotifyPlayTrackInPlaylist(spotifyPlaylistFor.uri, episode.dataset.uri)
+    return spotifySubTab === 'playlists'
+      ? spotifyPlayTrackInPlaylist(spotifyLibrary.playlists.find((p) => p.id === spotifySelectedPlaylistId).uri, episode.dataset.uri)
       : spotifyPlayEpisode(episode.dataset.uri);
   }
 
-  const tile = e.target.closest('.spotify-tile');
-  if (tile) {
-    if (tile.dataset.kind === 'playlist') {
-      const playlist = spotifyLibrary.playlists.find((p) => p.id === tile.dataset.id);
-      return openSpotifyPlaylist(tile.dataset.id, tile.dataset.uri, playlist ? playlist.name : '');
-    }
-    const show = spotifyLibrary.shows.find((sh) => sh.id === tile.dataset.id);
-    return openSpotifyShow(tile.dataset.id, show ? show.name : '');
+  const item = e.target.closest('.spotify-split-item');
+  if (item) {
+    return spotifySubTab === 'playlists' ? selectSpotifyPlaylist(item.dataset.id) : selectSpotifyShow(item.dataset.id);
   }
 });
 document.getElementById('spotify-header-playpause').addEventListener('click', spotifyPlayPause);
