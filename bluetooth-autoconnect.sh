@@ -1,6 +1,7 @@
+#!/bin/bash
+
 ####sudo nano /usr/local/bin/bluetooth-autoconnect.sh
 ####sudo chmod +x /usr/local/bin/bluetooth-autoconnect.sh
-#!/bin/bash
 
 DEVICE_MAC="D8:37:3B:BE:DD:E5"  # JBL Go 3
 MAX_ATTEMPTS=12
