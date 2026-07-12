@@ -76,6 +76,30 @@ async function getSpotifyToken() {
   return spotifyAccessToken;
 }
 
+// The Web Playback SDK's own "Failed to initialize player" message is a
+// generic wrapper with no further detail - it can't play DRM-protected audio
+// without Widevine/EME support in the browser, so this probes that directly
+// (the actual browser API the SDK depends on) to get a real, specific error
+// instead of guessing. Runs once regardless of whether the SDK itself ever
+// reports ready, so it still gives an answer even if init hangs entirely.
+async function probeWidevineSupport() {
+  if (!navigator.requestMediaKeySystemAccess) {
+    logToServer('widevine-probe', 'navigator.requestMediaKeySystemAccess does not exist in this browser at all', navigator.userAgent);
+    return;
+  }
+  const config = [{
+    initDataTypes: ['cenc'],
+    audioCapabilities: [{ contentType: 'audio/mp4;codecs="mp4a.40.2"' }],
+  }];
+  try {
+    await navigator.requestMediaKeySystemAccess('com.widevine.alpha', config);
+    logToServer('widevine-probe', 'Widevine EME is available - SDK init failure is likely something else', navigator.userAgent);
+  } catch (err) {
+    logToServer('widevine-probe', `Widevine EME NOT available (${err.name}): ${err.message}`, navigator.userAgent);
+  }
+}
+probeWidevineSupport();
+
 window.onSpotifyWebPlaybackSDKReady = () => {
   spotifyPlayer = new Spotify.Player({
     name: 'Raspy Dashboard',
