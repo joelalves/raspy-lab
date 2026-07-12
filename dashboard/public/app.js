@@ -140,6 +140,17 @@ let latestSpotify = {
 // already know what episode was tapped, remember it and use it as a
 // fallback display whenever the poll comes back without item data.
 let spotifyLastStartedEpisode = null; // { name, image, showName }
+// The 8-10s backend poll is fine for "what's playing on some other device",
+// but it made track changes on THIS device look sluggish (audio switches
+// instantly, the displayed name/art lagged behind by a full poll cycle).
+// player_state_changed fires immediately whenever this device is the active
+// one, so that's used instead whenever it's available - poll data is only
+// the source of truth when this device isn't currently the one playing.
+let spotifyLocalState = null; // { isPlaying, trackName, artistName, albumArt } | null
+
+function effectiveSpotify() {
+  return spotifyLocalState ? { ...latestSpotify, ...spotifyLocalState } : latestSpotify;
+}
 // Your playlists/podcasts, loaded once per session (lazily, the first time
 // the tab has something to show them in) rather than every poll cycle -
 // this is a browse action, not live status like everything else on /api/data.
@@ -188,6 +199,23 @@ window.onSpotifyWebPlaybackSDKReady = () => {
   spotifyPlayer.addListener('not_ready', () => {
     spotifyDeviceId = null;
   });
+  spotifyPlayer.addListener('player_state_changed', (state) => {
+    if (!state) {
+      spotifyLocalState = null; // playback moved to a different device - fall back to poll data
+      renderSpotifyTab();
+      return;
+    }
+    const track = (state.track_window && state.track_window.current_track) || {};
+    spotifyLocalState = {
+      isPlaying: !state.paused,
+      trackName: track.name || null,
+      artistName: track.type === 'episode'
+        ? (track.show && track.show.name) || (track.album && track.album.name) || null
+        : (track.artists || []).map((a) => a.name).join(', ') || null,
+      albumArt: (track.album && track.album.images && track.album.images[0] && track.album.images[0].url) || null,
+    };
+    renderSpotifyTab();
+  });
   spotifyPlayer.addListener('initialization_error', ({ message }) => logToServer('sdk-init', message));
   spotifyPlayer.addListener('authentication_error', ({ message }) => logToServer('sdk-auth', message));
   spotifyPlayer.addListener('account_error', ({ message }) => logToServer('sdk-account (Premium required)', message));
@@ -216,7 +244,7 @@ async function spotifyApi(method, path, body) {
 }
 
 function spotifyPlayPause() {
-  spotifyApi('PUT', latestSpotify.isPlaying ? '/pause' : '/play');
+  spotifyApi('PUT', effectiveSpotify().isPlaying ? '/pause' : '/play');
 }
 function spotifyNext() {
   spotifyApi('POST', '/next');
@@ -391,7 +419,7 @@ function spotifyEpisodeRow(item) {
 }
 
 function renderSpotifyPlayingTab() {
-  const s = latestSpotify;
+  const s = effectiveSpotify();
   const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
   // Fall back to the episode we know we started, if Spotify didn't send
   // back item metadata for it (see refreshSpotify's currentlyPlayingType).
@@ -482,7 +510,7 @@ function spotifySubNav() {
 
 function updateSpotifyHeaderBadge() {
   const badge = document.getElementById('spotify-badge');
-  const s = latestSpotify;
+  const s = effectiveSpotify();
   const usingFallback = !s.trackName && s.currentlyPlayingType === 'episode' && spotifyLastStartedEpisode;
   const trackName = s.trackName || (usingFallback ? spotifyLastStartedEpisode.name : null);
   if (trackName) {
