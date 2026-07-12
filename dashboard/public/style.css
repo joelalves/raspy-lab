@@ -428,6 +428,24 @@ main {
   margin: 4px 0;
 }
 
+.weather-overview-card .woc-icon-img {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  margin: 8px 0;
+  padding: 8px;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.weather-overview-card .woc-icon-img-fallback {
+  font-size: 84px;
+  line-height: 1;
+  margin: 8px 0;
+  background: none;
+  padding: 0;
+}
+
 .weather-overview-card .woc-label {
   font-size: 16px;
   font-weight: 500;
@@ -848,7 +866,20 @@ footer {
   box-shadow: inset 0 0 0 1px var(--cat-blue);
 }
 
-.radio-station-card .rsc-icon { font-size: 36px; }
+.radio-station-card .rsc-icon-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  padding: 6px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.radio-station-card .rsc-icon-img-fallback {
+  font-size: 36px;
+  background: none;
+  padding: 0;
+}
 
 .radio-station-card .rsc-name {
   font-size: 16px;
