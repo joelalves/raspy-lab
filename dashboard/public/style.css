@@ -1109,6 +1109,13 @@ footer {
   margin: 4px 0 10px;
 }
 
+.spotify-lib-header .spotify-lib-title { flex: 1; margin: 0; }
+
+.spotify-lib-header .spotify-btn-primary {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
 .spotify-episode-list {
   display: flex;
   flex-direction: column;
