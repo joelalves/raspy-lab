@@ -513,21 +513,33 @@ async function getSpotifyAccessToken() {
   const { clientId, clientSecret } = config.spotify || {};
   if (!spotifyToken.refreshToken || !clientId || !clientSecret) return null;
   if (spotifyToken.accessToken && Date.now() < spotifyToken.expiresAt - 30000) return spotifyToken.accessToken;
-  const data = await fetchJson('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-    },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: spotifyToken.refreshToken }),
-  });
-  spotifyToken.accessToken = data.access_token;
-  spotifyToken.expiresAt = Date.now() + data.expires_in * 1000;
-  if (data.refresh_token) {
-    spotifyToken.refreshToken = data.refresh_token; // Spotify rotates this occasionally
-    saveSpotifyToken();
+  try {
+    const data = await fetchJson('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: spotifyToken.refreshToken }),
+    });
+    spotifyToken.accessToken = data.access_token;
+    spotifyToken.expiresAt = Date.now() + data.expires_in * 1000;
+    if (data.refresh_token) {
+      spotifyToken.refreshToken = data.refresh_token; // Spotify rotates this occasionally
+      saveSpotifyToken();
+    }
+    return spotifyToken.accessToken;
+  } catch (err) {
+    // invalid_grant means the refresh token itself is dead (revoked from
+    // Spotify's side, or expired from a year of inactivity) - retrying with
+    // the same token will never succeed, so forget it and fall back to the
+    // "not linked" state instead of silently failing forever.
+    if (/invalid_grant/.test(err.message)) {
+      spotifyToken = { accessToken: null, refreshToken: null, expiresAt: 0 };
+      saveSpotifyToken();
+    }
+    throw err;
   }
-  return spotifyToken.accessToken;
 }
 
 // Queries the local Bluetooth speaker's connection state and battery level
