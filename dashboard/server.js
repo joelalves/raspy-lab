@@ -79,6 +79,7 @@ let cache = {
     deviceName: null,
     deviceId: null,
     itemType: null,
+    currentlyPlayingType: null,
     volumePercent: null,
     error: null,
   },
@@ -578,7 +579,7 @@ async function refreshBluetooth() {
 async function refreshSpotify() {
   const empty = {
     isPlaying: false, trackName: null, artistName: null, albumArt: null,
-    deviceName: null, deviceId: null, itemType: null, volumePercent: null,
+    deviceName: null, deviceId: null, itemType: null, currentlyPlayingType: null, volumePercent: null,
   };
   if (!config.spotify || !config.spotify.clientId) {
     return { status: 'warning', linked: false, ...empty, error: 'not configured' };
@@ -597,10 +598,6 @@ async function refreshSpotify() {
     const data = await res.json();
     const item = data.item || {};
     const isEpisode = item.type === 'episode';
-    // Temporary: podcasts have been showing up with no name/art on the Now
-    // Playing tab - log the raw shape once so we can see what's actually
-    // missing instead of guessing.
-    if (isEpisode) console.log('[spotify:debug episode item]', JSON.stringify(item).slice(0, 1000));
     logOnce('spotify', null);
     return {
       status: 'good',
@@ -616,6 +613,12 @@ async function refreshSpotify() {
       deviceName: (data.device && data.device.name) || null,
       deviceId: (data.device && data.device.id) || null,
       itemType: item.type || null,
+      // Spotify sometimes omits `item` entirely for podcast episodes (a
+      // known API gap - device/is_playing still come through fine), so this
+      // top-level field is the only reliable "an episode is playing" signal
+      // in that case. The frontend falls back to metadata it already has
+      // from browsing (the episode you tapped) when this happens.
+      currentlyPlayingType: data.currently_playing_type || null,
       volumePercent: (data.device && data.device.volume_percent) != null ? data.device.volume_percent : null,
       error: null,
     };

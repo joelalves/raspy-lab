@@ -132,8 +132,14 @@ let spotifyDeviceId = null;
 let spotifyAccessToken = null;
 let latestSpotify = {
   linked: false, isPlaying: false, trackName: null, artistName: null,
-  albumArt: null, deviceName: null, deviceId: null, itemType: null, volumePercent: null,
+  albumArt: null, deviceName: null, deviceId: null, itemType: null,
+  currentlyPlayingType: null, volumePercent: null,
 };
+// Spotify's API sometimes omits episode metadata entirely from /me/player
+// (device/is_playing still come through, just no name/art) - since we
+// already know what episode was tapped, remember it and use it as a
+// fallback display whenever the poll comes back without item data.
+let spotifyLastStartedEpisode = null; // { name, image, showName }
 // Your playlists/podcasts, loaded once per session (lazily, the first time
 // the tab has something to show them in) rather than every poll cycle -
 // this is a browse action, not live status like everything else on /api/data.
@@ -350,6 +356,11 @@ function spotifyPlayPlaylist(uri) {
   spotifyPlayOnThisDevice({ context_uri: uri });
 }
 function spotifyPlayEpisode(uri) {
+  const episode = spotifyEpisodes.find((e) => e.uri === uri);
+  const show = spotifyLibrary.shows.find((sh) => sh.id === spotifySelectedShowId);
+  if (episode) {
+    spotifyLastStartedEpisode = { name: episode.name, image: episode.image, showName: show ? show.name : null };
+  }
   spotifyPlayOnThisDevice({ uris: [uri] });
 }
 function spotifyPlayTrackInPlaylist(playlistUri, trackUri) {
@@ -382,16 +393,22 @@ function spotifyEpisodeRow(item) {
 function renderSpotifyPlayingTab() {
   const s = latestSpotify;
   const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
-  const art = s.albumArt
-    ? `<img class="spotify-playing-art" src="${s.albumArt}" alt="">`
+  // Fall back to the episode we know we started, if Spotify didn't send
+  // back item metadata for it (see refreshSpotify's currentlyPlayingType).
+  const usingFallback = !s.trackName && s.currentlyPlayingType === 'episode' && spotifyLastStartedEpisode;
+  const trackName = s.trackName || (usingFallback ? spotifyLastStartedEpisode.name : null);
+  const artistName = s.artistName || (usingFallback ? spotifyLastStartedEpisode.showName : null);
+  const albumArt = s.albumArt || (usingFallback ? spotifyLastStartedEpisode.image : null);
+  const art = albumArt
+    ? `<img class="spotify-playing-art" src="${albumArt}" alt="">`
     : '<div class="spotify-playing-art spotify-art-fallback">🎵</div>';
   return `
     <div class="spotify-playing-tab">
       ${art}
-      <div class="spotify-playing-track">${s.trackName || 'Nothing playing'}</div>
-      <div class="spotify-playing-artist">${s.artistName || ''}</div>
+      <div class="spotify-playing-track">${trackName || 'Nothing playing'}</div>
+      <div class="spotify-playing-artist">${artistName || ''}</div>
       ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
-      ${!playingHere && spotifyDeviceId && s.trackName ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play here instead</button>' : ''}
+      ${!playingHere && spotifyDeviceId && trackName ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play here instead</button>' : ''}
       <div class="spotify-controls">
         <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
         <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
@@ -466,9 +483,11 @@ function spotifySubNav() {
 function updateSpotifyHeaderBadge() {
   const badge = document.getElementById('spotify-badge');
   const s = latestSpotify;
-  if (s.trackName) {
+  const usingFallback = !s.trackName && s.currentlyPlayingType === 'episode' && spotifyLastStartedEpisode;
+  const trackName = s.trackName || (usingFallback ? spotifyLastStartedEpisode.name : null);
+  if (trackName) {
     badge.classList.remove('hidden');
-    document.getElementById('spotify-header-track').textContent = s.trackName;
+    document.getElementById('spotify-header-track').textContent = trackName;
     document.getElementById('spotify-header-playpause').textContent = s.isPlaying ? '⏸' : '▶';
     document.getElementById('spotify-header-vol-pct').textContent = s.volumePercent != null ? `${s.volumePercent}%` : '—';
   } else {
