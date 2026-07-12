@@ -2,6 +2,7 @@ const express = require('express');
 const Docker = require('dockerode');
 const { Client } = require('pg');
 const { getSystemInfo } = require('./system-info');
+const { cpuPercent, memPercent, demuxDockerLogs } = require('./lib/pure');
 
 const PORT = process.env.PORT || 9090;
 const API_KEY = process.env.AGENT_API_KEY || '';
@@ -14,21 +15,6 @@ app.use((req, res, next) => {
   if (req.get('x-api-key') === API_KEY) return next();
   return res.status(401).json({ error: 'unauthorized' });
 });
-
-function cpuPercent(stats) {
-  const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
-  const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
-  const cpuCount = stats.cpu_stats.online_cpus || (stats.cpu_stats.cpu_usage.percpu_usage || []).length || 1;
-  if (systemDelta <= 0 || cpuDelta <= 0) return 0;
-  return (cpuDelta / systemDelta) * cpuCount * 100;
-}
-
-function memPercent(stats) {
-  const cache = (stats.memory_stats.stats && stats.memory_stats.stats.cache) || 0;
-  const usage = (stats.memory_stats.usage || 0) - cache;
-  const limit = stats.memory_stats.limit || 1;
-  return (usage / limit) * 100;
-}
 
 app.get('/api/containers', async (req, res) => {
   try {
@@ -66,21 +52,6 @@ app.get('/api/containers', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Docker's log stream is multiplexed per-frame (8-byte header: 1 byte stream
-// type, 3 reserved, 4 byte big-endian payload length) whenever the container
-// wasn't started with a TTY - which is every container in a typical compose
-// stack. Strip the framing to get plain text lines back.
-function demuxDockerLogs(buffer) {
-  const chunks = [];
-  let offset = 0;
-  while (offset + 8 <= buffer.length) {
-    const size = buffer.readUInt32BE(offset + 4);
-    chunks.push(buffer.slice(offset + 8, offset + 8 + size));
-    offset += 8 + size;
-  }
-  return Buffer.concat(chunks).toString('utf8').split('\n').filter(Boolean);
-}
 
 app.get('/api/containers/:id/logs', async (req, res) => {
   try {

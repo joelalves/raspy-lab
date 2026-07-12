@@ -11,6 +11,7 @@
 # Pi has, without needing to detect it up front.
 
 set -euo pipefail
+KIOSK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CHROMIUM_BIN=$(command -v chromium || command -v chromium-browser || true)
 if [ -z "$CHROMIUM_BIN" ]; then
@@ -20,15 +21,30 @@ fi
 
 KIOSK_CMD="$CHROMIUM_BIN --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --check-for-update-interval=1 --incognito --app=http://localhost:8080"
 
+# Bluetooth speaker auto-reconnect - installed as a user systemd service, not
+# a system one, because the Bluetooth audio profile has to be negotiated with
+# this user's own PipeWire/WirePlumber instance, which only exists once the
+# desktop session has started (see bluetooth-autoconnect.service's own
+# comment for the full reasoning). Edit DEVICE_MAC in bluetooth-autoconnect.sh
+# for your own speaker before running this if you haven't already.
+if [ -f "$KIOSK_DIR/bluetooth-autoconnect.sh" ] && [ -f "$KIOSK_DIR/bluetooth-autoconnect.service" ]; then
+  sudo cp "$KIOSK_DIR/bluetooth-autoconnect.sh" /usr/local/bin/bluetooth-autoconnect.sh
+  sudo chmod +x /usr/local/bin/bluetooth-autoconnect.sh
+  mkdir -p "$HOME/.config/systemd/user"
+  cp "$KIOSK_DIR/bluetooth-autoconnect.service" "$HOME/.config/systemd/user/"
+  systemctl --user daemon-reload
+  systemctl --user enable --now bluetooth-autoconnect.service
+  echo "Bluetooth auto-connect installed and enabled (systemctl --user status bluetooth-autoconnect.service to check)."
+fi
+
 # Pick the best audio output on every login: prefer a paired Bluetooth
 # speaker if one is connected, otherwise fall back to the HDMI monitor's
 # speakers (some Pi audio hardware exposes both an HDMI sink and a 3.5mm
 # jack sink, and PipeWire/WirePlumber sometimes defaults to the unused
 # jack). Bluetooth reconnection itself is handled separately by the
-# bluetooth-autoconnect systemd user service (see bluetooth-autoconnect.sh/
-# .service at the repo root) - this only picks which resulting sink is
-# default. Looked up by name (not a hardcoded numeric id) because PipeWire
-# reassigns object ids on every boot.
+# bluetooth-autoconnect service installed above - this only picks which
+# resulting sink is default. Looked up by name (not a hardcoded numeric id)
+# because PipeWire reassigns object ids on every boot.
 mkdir -p "$HOME/.config/labwc"
 cat > "$HOME/.config/labwc/hdmi-audio-default.sh" <<'EOF'
 #!/usr/bin/env bash

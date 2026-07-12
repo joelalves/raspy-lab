@@ -251,15 +251,43 @@ Since the touchscreen Pi has no keyboard/mouse, navigation is 100% tap-driven:
   refresh of all sources via `POST /api/refresh`, instead of waiting for the
   next automatic poll.
 
+### Code layout
+
+Both `dashboard/` and `server-agent/` split "one third-party service/concern
+per file" rather than one large script, on both the server and browser side —
+no bundler or framework either way, since the whole point is a zero-build
+deploy (`rsync` the folder, `systemctl restart`).
+
+- `dashboard/server.js` is a thin composition root: load config, wire up each
+  integration, assemble the poll cache, mount routes, start listening. The
+  actual Docker/Jenkins/SonarQube/Weather/Pi-hole/Shelly/Bluetooth/Spotify/
+  Postgres/overview logic each lives in its own file under
+  `dashboard/integrations/`, exporting a `refresh*()` function (and an
+  Express `Router` for any routes it owns, e.g. Spotify's OAuth callback).
+  Shared helpers (`fetchJson`, `logOnce`, the API-key middleware) live in
+  `dashboard/lib/`.
+- `dashboard/public/js/` is the frontend, loaded as native browser ES modules
+  (`<script type="module">` — every target browser supports this with zero
+  tooling): `format.js` (pure formatting/status helpers), `radio.js`,
+  `spotify.js`, `views.js` (the poll-driven status tiles), `nav.js` (tab
+  switching/theme), and `main.js` (the entry point — poll loop, event wiring,
+  Jenkins hold-to-build gesture, log modal).
+- `server-agent/` follows the same "pure logic pulled into `lib/pure.js`"
+  pattern as `dashboard/lib/pure.js`, for the same reason: unit-testable
+  without a live Docker socket or Postgres connection.
+
 ### Tests
 
-The pure logic (status mapping, weather icon lookup, Shelly history pruning
-and CO₂ math, etc.) lives in `dashboard/lib/pure.js`, separate from the parts
-that need a live config/network (`dashboard/server.js`), so it can be unit
-tested on its own with Node's built-in test runner — no extra dependency:
+The pure, deterministic logic (status mapping, weather icon lookup, Shelly
+history pruning and CO₂ math, Docker CPU/mem stat math, log demuxing,
+frontend formatting helpers, etc.) is pulled out into `lib/pure.js` /
+`public/js/format.js` files, separate from anything that needs a live
+config/network/DOM, so it can be unit tested with Node's built-in test runner
+— no extra dependency:
 
 ```bash
 cd dashboard && npm test
+cd server-agent && npm test
 ```
 
 ## Troubleshooting

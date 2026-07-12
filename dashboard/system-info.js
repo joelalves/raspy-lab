@@ -1,3 +1,9 @@
+// Intentionally near-identical to server-agent/system-info.js (same logic,
+// this header comment aside). This runs on the touchscreen Pi to report its
+// own stats; the twin runs on the server Pi as part of a completely separate
+// deployed process with no shared package/monorepo tooling between them, so
+// duplication is the pragmatic choice here - just keep both copies' logic in
+// sync if you change this file.
 const os = require('os');
 const fs = require('fs');
 const { execSync } = require('child_process');

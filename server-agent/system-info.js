@@ -1,3 +1,9 @@
+// Intentionally near-identical to dashboard/system-info.js (same logic, this
+// header comment aside). This runs on the server Pi as part of server-agent;
+// the twin runs on the touchscreen Pi as part of the dashboard - two
+// completely separate deployed processes with no shared package/monorepo
+// tooling between them, so duplication is the pragmatic choice here - just
+// keep both copies' logic in sync if you change this file.
 const os = require('os');
 const fs = require('fs');
 const { execSync } = require('child_process');
