@@ -1,5 +1,109 @@
 const POLL_MS = 8000;
 
+// Portuguese radio stations - direct MP3/AAC streams only (not .m3u8/HLS,
+// which a plain <audio> element can't play in Chromium without extra JS).
+// Each was verified with a real request confirming an audio/* content-type
+// before being added here.
+const RADIO_STATIONS = [
+  { id: 'comercial', name: 'Rádio Comercial', url: 'https://stream-icy.bauermedia.pt/comercial.mp3' },
+  { id: 'rfm', name: 'RFM', url: 'https://23603.live.streamtheworld.com/RFMAAC.aac' },
+  { id: 'megahits', name: 'Mega Hits', url: 'http://22333.live.streamtheworld.com:3690/MEGA_HITS_SC' },
+  { id: 'antena3', name: 'Antena 3', url: 'https://radiocast.rtp.pt/antena380a.mp3' },
+  { id: 'm80', name: 'M80', url: 'http://stream-icy.bauermedia.pt/m80.mp3' },
+  { id: 'antena1', name: 'Antena 1', url: 'https://radiocast.rtp.pt/antena180a.mp3' },
+  { id: 'renascenca', name: 'Rádio Renascença', url: 'http://22653.live.streamtheworld.com/RADIO_RENASCENCA_SC' },
+  { id: 'cidadefm', name: 'Cidade FM', url: 'https://stream-icy.bauermedia.pt/cidade.mp3' },
+  { id: 'smoothfm', name: 'Smooth FM', url: 'https://stream-icy.bauermedia.pt/smooth.aac' },
+  { id: 'tsf', name: 'TSF Rádio Notícias', url: 'https://tsfdirecto.tsf.pt/tsfdirecto.mp3' },
+];
+
+const RADIO_VOLUME_KEY = 'raspy-dashboard-radio-volume';
+const radioAudio = document.getElementById('radio-audio');
+let currentRadioStation = null;
+
+function getStoredVolume() {
+  const v = parseFloat(localStorage.getItem(RADIO_VOLUME_KEY));
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
+}
+
+function playStation(station) {
+  if (currentRadioStation && currentRadioStation.id === station.id) {
+    stopRadio();
+    return;
+  }
+  currentRadioStation = station;
+  radioAudio.src = station.url;
+  radioAudio.volume = getStoredVolume();
+  radioAudio.muted = false;
+  radioAudio.play().catch((err) => {
+    currentRadioStation = null;
+    updateRadioUI();
+    alert(`Couldn't play ${station.name}: ${err.message}`);
+  });
+  updateRadioUI();
+}
+
+function stopRadio() {
+  radioAudio.pause();
+  radioAudio.removeAttribute('src');
+  radioAudio.load();
+  currentRadioStation = null;
+  updateRadioUI();
+}
+
+function changeVolume(delta) {
+  const next = Math.max(0, Math.min(1, radioAudio.volume + delta));
+  radioAudio.volume = next;
+  radioAudio.muted = false;
+  localStorage.setItem(RADIO_VOLUME_KEY, next);
+  updateRadioUI();
+}
+
+function toggleMute() {
+  radioAudio.muted = !radioAudio.muted;
+  updateRadioUI();
+}
+
+function updateRadioUI() {
+  const badge = document.getElementById('radio-badge');
+  if (currentRadioStation) {
+    badge.classList.remove('hidden');
+    document.getElementById('radio-station-name').textContent = currentRadioStation.name;
+    document.getElementById('radio-vol-pct').textContent = `${Math.round(radioAudio.volume * 100)}%`;
+    document.getElementById('radio-mute-btn').textContent = radioAudio.muted ? '🔇' : '🔊';
+  } else {
+    badge.classList.add('hidden');
+  }
+  renderRadioTab();
+  const overviewCard = document.getElementById('radio-overview-card');
+  if (overviewCard) overviewCard.outerHTML = renderRadioOverviewCard();
+}
+
+function renderRadioOverviewCard() {
+  const label = currentRadioStation ? currentRadioStation.name : 'Tap to browse stations';
+  return `
+    <div class="stat-card weather-overview-card" data-jump="radio" id="radio-overview-card">
+      <div class="stat-title">Radio</div>
+      <div class="woc-icon">📻</div>
+      <div class="woc-label">${label}</div>
+      ${currentRadioStation ? `<div class="woc-details"><span>${radioAudio.muted ? '🔇' : '🔊'} ${Math.round(radioAudio.volume * 100)}%</span></div>` : ''}
+    </div>`;
+}
+
+function renderRadioTab() {
+  const view = document.getElementById('view-radio');
+  if (!view) return;
+  view.innerHTML = RADIO_STATIONS.map((s) => {
+    const playing = currentRadioStation && currentRadioStation.id === s.id;
+    return `
+      <div class="radio-station-card${playing ? ' playing' : ''}" data-station-id="${s.id}">
+        <div class="rsc-icon">📻</div>
+        <div class="rsc-name">${s.name}</div>
+        ${playing ? '<div class="rsc-status">▶ Playing</div>' : ''}
+      </div>`;
+  }).join('');
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '0 MB';
   const mb = bytes / (1024 * 1024);
@@ -157,7 +261,7 @@ function renderOverview(data) {
       : statItem('Status', sh.error || 'unreachable', sh.status, true)
   );
 
-  return renderWeatherOverviewCard(data.weather) + shTile + phTile + pgTile + dockerTile;
+  return renderWeatherOverviewCard(data.weather) + renderRadioOverviewCard() + shTile + phTile + pgTile + dockerTile;
 }
 
 function renderSystemTab(data) {
@@ -597,6 +701,19 @@ document.getElementById('view-jenkins').addEventListener('pointerdown', (e) => {
 });
 document.addEventListener('pointerup', endJenkinsHold);
 document.addEventListener('pointercancel', endJenkinsHold);
+
+document.getElementById('view-radio').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-station-id]');
+  if (!card) return;
+  const station = RADIO_STATIONS.find((s) => s.id === card.dataset.stationId);
+  if (station) playStation(station);
+});
+document.getElementById('radio-vol-down').addEventListener('click', () => changeVolume(-0.1));
+document.getElementById('radio-vol-up').addEventListener('click', () => changeVolume(0.1));
+document.getElementById('radio-mute-btn').addEventListener('click', toggleMute);
+document.getElementById('radio-stop-btn').addEventListener('click', stopRadio);
+
+renderRadioTab();
 
 refresh();
 setInterval(refresh, POLL_MS);

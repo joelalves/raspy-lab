@@ -207,6 +207,27 @@ This needs your Jenkins API token to have build permission (not just read).
 Jenkins CSRF protection is handled automatically (the dashboard fetches a
 crumb before POSTing), whether or not your instance has it enabled.
 
+### Radio tab
+
+Ten Portuguese radio stations (Rádio Comercial, RFM, Mega Hits, Antena 1,
+Antena 3, M80, Rádio Renascença, Cidade FM, Smooth FM, TSF) as tap-to-play
+cards. This is pure client-side playback — the touchscreen Pi's own browser
+plays the stream through whatever speakers it's connected to, no backend
+involved at all. Tap a station to play it, tap the same one again to stop.
+
+The header shows a compact now-playing strip (station name, volume ±,
+mute/unmute, stop) whenever something's playing, and disappears entirely
+otherwise. Volume is remembered across stations (and page reloads) via
+`localStorage`; playback itself doesn't resume after a reload — same as
+turning a physical radio back on after a power cycle.
+
+Only direct MP3/AAC stream URLs are used, not `.m3u8`/HLS — Chromium's plain
+`<audio>` element can't play HLS without extra JS libraries. If you want to
+swap a station or add your own, edit `RADIO_STATIONS` in
+`dashboard/public/app.js`; verify any new URL actually serves audio first
+(`curl -I <url>` should show `Content-Type: audio/...`, not `text/html` or
+`application/vnd.apple.mpegurl`).
+
 ### Push notifications on outage/recovery
 
 Set `notifications.ntfyUrl` in `dashboard/config.json` to a

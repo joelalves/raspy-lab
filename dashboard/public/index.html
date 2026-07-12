@@ -22,6 +22,14 @@
         <span id="agent-badge">
           <span class="dot good" id="agent-dot"></span>Agent <small id="agent-text"></small>
         </span>
+        <span id="radio-badge" class="hidden">
+          📻 <span id="radio-station-name"></span>
+          <button id="radio-vol-down" class="radio-btn" title="Volume down">−</button>
+          <span id="radio-vol-pct"></span>
+          <button id="radio-vol-up" class="radio-btn" title="Volume up">+</button>
+          <button id="radio-mute-btn" class="radio-btn" title="Mute/unmute">🔊</button>
+          <button id="radio-stop-btn" class="radio-btn" title="Stop">⏹</button>
+        </span>
         <span class="dot good" id="overall-dot"></span><span id="overall-text">loading…</span>
         <button id="theme-btn" title="Toggle dark mode">🌙</button>
         <button id="refresh-btn" title="Refresh now">⟳</button>
@@ -37,6 +45,7 @@
         <button data-view="jenkins"><span>Jenkins</span><small id="badge-jenkins"></small></button>
         <button data-view="sonarqube"><span>SonarQube</span><small id="badge-sonarqube"></small></button>
         <button data-view="shelly"><span>Shelly</span><small id="badge-shelly"></small></button>
+        <button data-view="radio"><span>Radio</span><small id="badge-radio"></small></button>
       </nav>
       <main>
         <section id="view-overview" class="view active"></section>
@@ -47,6 +56,7 @@
         <section id="view-jenkins" class="view"></section>
         <section id="view-sonarqube" class="view"></section>
         <section id="view-shelly" class="view"></section>
+        <section id="view-radio" class="view"></section>
       </main>
     </div>
     <footer id="updated-at">—</footer>
@@ -59,6 +69,7 @@
         <pre id="log-modal-body"></pre>
       </div>
     </div>
+    <audio id="radio-audio" preload="none"></audio>
   </div>
   <script src="app.js"></script>
 </body>
