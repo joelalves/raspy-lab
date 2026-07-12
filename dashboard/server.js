@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const express = require('express');
 const { getSystemInfo } = require('./system-info');
 const {
@@ -64,6 +67,7 @@ let cache = {
     history: [],
     error: null,
   },
+  bluetooth: { status: 'warning', connected: false, name: null, batteryPct: null, error: null },
 };
 
 async function fetchJson(url, options = {}, timeoutMs = 5000) {
@@ -467,6 +471,33 @@ async function refreshShelly() {
   }
 }
 
+// Queries the local Bluetooth speaker's connection state and battery level
+// (if the device reports one over BlueZ's Battery1 interface - not all
+// speakers do). Runs `bluetoothctl info` directly since this only works on
+// the same machine the speaker is paired to (the touchscreen Pi itself).
+async function refreshBluetooth() {
+  const mac = config.bluetooth && config.bluetooth.mac;
+  const empty = { connected: false, name: null, batteryPct: null };
+  if (!mac) return { status: 'warning', ...empty, error: 'not configured' };
+  try {
+    const { stdout } = await execFileAsync('bluetoothctl', ['info', mac], { timeout: 4000 });
+    const connected = /Connected: yes/.test(stdout);
+    const nameMatch = stdout.match(/^\s*Name: (.+)$/m);
+    const batteryMatch = stdout.match(/Battery Percentage:.*\((\d+)\)/);
+    logOnce('bluetooth', null);
+    return {
+      status: connected ? 'good' : 'warning',
+      connected,
+      name: nameMatch ? nameMatch[1].trim() : null,
+      batteryPct: batteryMatch ? Number(batteryMatch[1]) : null,
+      error: null,
+    };
+  } catch (err) {
+    logOnce('bluetooth', err.message);
+    return { status: 'warning', ...empty, error: err.message };
+  }
+}
+
 // Weather changes slowly and Open-Meteo doesn't need frequent polling, so it
 // runs on its own longer cycle instead of the fast main refresh loop.
 const WEATHER_REFRESH_MS = ((config.weather && config.weather.refreshIntervalMinutes) || 30) * 60 * 1000;
@@ -506,7 +537,7 @@ async function notifyOnTransition(overallStatus, criticalSources) {
 }
 
 async function refreshAll() {
-  const [overview, docker, jenkins, sonarqube, postgres, pihole, shelly] = await Promise.all([
+  const [overview, docker, jenkins, sonarqube, postgres, pihole, shelly, bluetooth] = await Promise.all([
     refreshOverview(),
     refreshDocker(),
     refreshJenkins(),
@@ -514,8 +545,9 @@ async function refreshAll() {
     refreshPostgres(),
     refreshPihole(),
     refreshShelly(),
+    refreshBluetooth(),
   ]);
-  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather: weatherCache, postgres, pihole, shelly };
+  cache = { generatedAt: new Date().toISOString(), overview, docker, jenkins, sonarqube, weather: weatherCache, postgres, pihole, shelly, bluetooth };
 
   const statuses = { agent: overview.agent.status, docker: docker.status, jenkins: jenkins.status, sonarqube: sonarqube.status, postgres: postgres.status, pihole: pihole.status, shelly: shelly.status };
   const overallStatus = worstStatus(Object.values(statuses));

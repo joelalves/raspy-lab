@@ -126,6 +126,15 @@ header h1 {
   font-size: 12px;
 }
 
+#radio-battery {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+#radio-battery.hidden { display: none; }
+
 .radio-btn {
   border: 1px solid var(--border);
   background: transparent;

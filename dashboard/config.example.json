@@ -25,6 +25,9 @@
     "url": "http://SHELLY_DEVICE_IP",
     "carbonIntensityGramsPerKwh": 200
   },
+  "bluetooth": {
+    "mac": "AA:BB:CC:DD:EE:FF"
+  },
   "notifications": {
     "ntfyUrl": "https://ntfy.sh/your-unique-topic-name"
   }

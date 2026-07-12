@@ -23,6 +23,7 @@ const RADIO_STATIONS = [
 const RADIO_VOLUME_KEY = 'raspy-dashboard-radio-volume';
 const radioAudio = document.getElementById('radio-audio');
 let currentRadioStation = null;
+let latestBluetooth = { connected: false, name: null, batteryPct: null };
 
 function getStoredVolume() {
   const v = parseFloat(localStorage.getItem(RADIO_VOLUME_KEY));
@@ -67,13 +68,21 @@ function toggleMute() {
   updateRadioUI();
 }
 
+function batteryLabel() {
+  return latestBluetooth.connected && latestBluetooth.batteryPct != null ? `🔋${latestBluetooth.batteryPct}%` : null;
+}
+
 function updateRadioUI() {
   const badge = document.getElementById('radio-badge');
+  const battery = document.getElementById('radio-battery');
   if (currentRadioStation) {
     badge.classList.remove('hidden');
     document.getElementById('radio-station-name').textContent = currentRadioStation.name;
     document.getElementById('radio-vol-pct').textContent = `${Math.round(radioAudio.volume * 100)}%`;
     document.getElementById('radio-mute-btn').textContent = radioAudio.muted ? '🔇' : '🔊';
+    const label = batteryLabel();
+    battery.textContent = label || '';
+    battery.classList.toggle('hidden', !label);
   } else {
     badge.classList.add('hidden');
   }
@@ -94,7 +103,7 @@ function renderRadioOverviewCard() {
       <div class="stat-title">Radio</div>
       ${icon}
       <div class="woc-label">${label}</div>
-      ${currentRadioStation ? `<div class="woc-details"><span>${radioAudio.muted ? '🔇' : '🔊'} ${Math.round(radioAudio.volume * 100)}%</span></div>` : ''}
+      ${currentRadioStation ? `<div class="woc-details"><span>${radioAudio.muted ? '🔇' : '🔊'} ${Math.round(radioAudio.volume * 100)}%</span>${batteryLabel() ? `<span>${batteryLabel()}</span>` : ''}</div>` : ''}
     </div>`;
 }
 
@@ -536,6 +545,9 @@ async function refresh() {
     document.getElementById('view-pihole').innerHTML = renderPihole(data.pihole);
     document.getElementById('view-system').innerHTML = renderSystemTab(data);
     document.getElementById('view-shelly').innerHTML = renderShelly(data.shelly);
+
+    latestBluetooth = data.bluetooth || latestBluetooth;
+    updateRadioUI();
 
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
