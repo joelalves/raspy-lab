@@ -284,11 +284,20 @@ async function loadSpotifyLibrary() {
   renderSpotifyTab();
 }
 
+// Some Spotify-generated playlists (Daily Mix, Discover Weekly, Release
+// Radar, etc.) return 403 on this endpoint for third-party apps regardless
+// of scope - a Spotify-side restriction, not something we can fix. Track
+// that distinctly from "still loading" so the UI doesn't hang forever.
+let spotifyPlaylistTracksFailed = false;
+let spotifyEpisodesFailed = false;
+
 async function selectSpotifyPlaylist(id) {
   spotifySelectedPlaylistId = id;
   spotifyPlaylistTracks = [];
+  spotifyPlaylistTracksFailed = false;
   renderSpotifyTab();
   const data = await spotifyFetch(`/playlists/${id}/tracks?limit=50`);
+  spotifyPlaylistTracksFailed = !data;
   spotifyPlaylistTracks = ((data && data.items) || []).map((item) => item.track).filter(Boolean).map((t) => ({
     name: t.name,
     uri: t.uri,
@@ -301,8 +310,10 @@ async function selectSpotifyPlaylist(id) {
 async function selectSpotifyShow(id) {
   spotifySelectedShowId = id;
   spotifyEpisodes = [];
+  spotifyEpisodesFailed = false;
   renderSpotifyTab();
   const data = await spotifyFetch(`/shows/${id}/episodes?limit=30`);
+  spotifyEpisodesFailed = !data;
   spotifyEpisodes = ((data && data.items) || []).filter(Boolean).map((e) => ({
     name: e.name,
     uri: e.uri,
@@ -404,7 +415,9 @@ function renderSpotifyPlaylistsTab() {
     const playlist = spotifyLibrary.playlists.find((p) => p.id === spotifySelectedPlaylistId);
     const tracks = spotifyPlaylistTracks.length
       ? spotifyPlaylistTracks.map((t) => spotifyEpisodeRow({ ...t, sub: t.artistName, fallbackIcon: '🎵' })).join('')
-      : '<p class="spotify-lib-empty">Loading tracks…</p>';
+      : spotifyPlaylistTracksFailed
+        ? "<p class=\"spotify-lib-empty\">Can't load this playlist's tracks - Spotify blocks this for some auto-generated playlists (Daily Mix, Discover Weekly, etc.). Play All still works.</p>"
+        : '<p class="spotify-lib-empty">Loading tracks…</p>';
     main = `
       <div class="spotify-lib-header">
         <div class="spotify-lib-title">${playlist ? playlist.name : ''}</div>
@@ -426,7 +439,9 @@ function renderSpotifyPodcastsTab() {
     const show = spotifyLibrary.shows.find((sh) => sh.id === spotifySelectedShowId);
     const episodes = spotifyEpisodes.length
       ? spotifyEpisodes.map((e) => spotifyEpisodeRow({ ...e, sub: e.releaseDate, fallbackIcon: '🎙️' })).join('')
-      : '<p class="spotify-lib-empty">Loading episodes…</p>';
+      : spotifyEpisodesFailed
+        ? '<p class="spotify-lib-empty">Could not load episodes for this show.</p>'
+        : '<p class="spotify-lib-empty">Loading episodes…</p>';
     main = `
       <div class="spotify-lib-header">
         <div class="spotify-lib-title">${show ? show.name : ''}</div>
