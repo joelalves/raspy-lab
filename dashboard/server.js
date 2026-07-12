@@ -81,6 +81,8 @@ let cache = {
     itemType: null,
     currentlyPlayingType: null,
     volumePercent: null,
+    progressMs: null,
+    durationMs: null,
     error: null,
   },
 };
@@ -580,6 +582,7 @@ async function refreshSpotify() {
   const empty = {
     isPlaying: false, trackName: null, artistName: null, albumArt: null,
     deviceName: null, deviceId: null, itemType: null, currentlyPlayingType: null, volumePercent: null,
+    progressMs: null, durationMs: null,
   };
   if (!config.spotify || !config.spotify.clientId) {
     return { status: 'warning', linked: false, ...empty, error: 'not configured' };
@@ -620,6 +623,8 @@ async function refreshSpotify() {
       // from browsing (the episode you tapped) when this happens.
       currentlyPlayingType: data.currently_playing_type || null,
       volumePercent: (data.device && data.device.volume_percent) != null ? data.device.volume_percent : null,
+      progressMs: data.progress_ms != null ? data.progress_ms : null,
+      durationMs: item.duration_ms != null ? item.duration_ms : null,
       error: null,
     };
   } catch (err) {

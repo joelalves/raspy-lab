@@ -133,8 +133,12 @@ let spotifyAccessToken = null;
 let latestSpotify = {
   linked: false, isPlaying: false, trackName: null, artistName: null,
   albumArt: null, deviceName: null, deviceId: null, itemType: null,
-  currentlyPlayingType: null, volumePercent: null,
+  currentlyPlayingType: null, volumePercent: null, progressMs: null, durationMs: null,
 };
+// Timestamp of the last time we got a real progressMs reading (from either
+// the poll or the SDK) - lets the progress bar keep ticking smoothly between
+// updates instead of only jumping once per poll/state-change.
+let spotifyProgressCapturedAt = 0;
 // Spotify's API sometimes omits episode metadata entirely from /me/player
 // (device/is_playing still come through, just no name/art) - since we
 // already know what episode was tapped, remember it and use it as a
@@ -213,7 +217,10 @@ window.onSpotifyWebPlaybackSDKReady = () => {
         ? (track.show && track.show.name) || (track.album && track.album.name) || null
         : (track.artists || []).map((a) => a.name).join(', ') || null,
       albumArt: (track.album && track.album.images && track.album.images[0] && track.album.images[0].url) || null,
+      progressMs: state.position,
+      durationMs: state.duration,
     };
+    spotifyProgressCapturedAt = Date.now();
     renderSpotifyTab();
   });
   spotifyPlayer.addListener('initialization_error', ({ message }) => logToServer('sdk-init', message));
@@ -418,6 +425,22 @@ function spotifyEpisodeRow(item) {
     </div>`;
 }
 
+function formatMs(ms) {
+  if (ms == null || !Number.isFinite(ms)) return '0:00';
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+// Ticks the position forward between real updates (from the poll or the SDK)
+// so the bar moves smoothly instead of only jumping once every few seconds.
+function liveProgressMs(s) {
+  if (s.progressMs == null) return null;
+  const elapsed = s.isPlaying ? Date.now() - spotifyProgressCapturedAt : 0;
+  return Math.min(s.progressMs + Math.max(elapsed, 0), s.durationMs != null ? s.durationMs : Infinity);
+}
+
 function renderSpotifyPlayingTab() {
   const s = effectiveSpotify();
   const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
@@ -430,13 +453,22 @@ function renderSpotifyPlayingTab() {
   const art = albumArt
     ? `<img class="spotify-playing-art" src="${albumArt}" alt="">`
     : '<div class="spotify-playing-art spotify-art-fallback">🎵</div>';
+  const position = liveProgressMs(s);
+  const pct = position != null && s.durationMs ? Math.min(100, (position / s.durationMs) * 100) : 0;
   return `
     <div class="spotify-playing-tab">
-      ${art}
-      <div class="spotify-playing-track">${trackName || 'Nothing playing'}</div>
-      <div class="spotify-playing-artist">${artistName || ''}</div>
-      ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
-      ${!playingHere && spotifyDeviceId && trackName ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play here instead</button>' : ''}
+      <div class="spotify-playing-art-col">${art}</div>
+      <div class="spotify-playing-info-col">
+        <div class="spotify-playing-track">${trackName || 'Nothing playing'}</div>
+        <div class="spotify-playing-artist">${artistName || ''}</div>
+        ${s.deviceName ? `<div class="spotify-device">${playingHere ? 'Playing here' : `Playing on: ${s.deviceName}`}</div>` : ''}
+        ${!playingHere && spotifyDeviceId && trackName ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play here instead</button>' : ''}
+        ${position != null ? `
+        <div class="spotify-progress">
+          <span id="spotify-progress-current" class="spotify-progress-time">${formatMs(position)}</span>
+          <div class="spotify-progress-track"><div id="spotify-progress-fill" class="spotify-progress-fill" style="width:${pct}%"></div></div>
+          <span class="spotify-progress-time">${formatMs(s.durationMs)}</span>
+        </div>` : ''}
       <div class="spotify-controls">
         <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
         <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
@@ -446,6 +478,7 @@ function renderSpotifyPlayingTab() {
         <button id="spotify-vol-down" class="radio-btn" title="Volume down">−</button>
         <span id="spotify-vol-pct">${s.volumePercent != null ? `${s.volumePercent}%` : '—'}</span>
         <button id="spotify-vol-up" class="radio-btn" title="Volume up">+</button>
+      </div>
       </div>
     </div>`;
 }
@@ -977,6 +1010,7 @@ async function refresh() {
     updateRadioUI();
 
     latestSpotify = data.spotify || latestSpotify;
+    if (!spotifyLocalState) spotifyProgressCapturedAt = Date.now();
     renderSpotifyTab();
 
     const order = ['good', 'warning', 'serious', 'critical'];
@@ -1200,3 +1234,18 @@ renderSpotifyTab();
 
 refresh();
 setInterval(refresh, POLL_MS);
+
+// Updates just the progress bar fill/time directly (not a full re-render,
+// which would be wasteful and could interrupt a tap) so it visibly ticks
+// forward every second instead of only jumping on each poll/state-change.
+setInterval(() => {
+  if (spotifySubTab !== 'playing') return;
+  const fill = document.getElementById('spotify-progress-fill');
+  const current = document.getElementById('spotify-progress-current');
+  if (!fill || !current) return;
+  const s = effectiveSpotify();
+  const position = liveProgressMs(s);
+  if (position == null) return;
+  current.textContent = formatMs(position);
+  fill.style.width = `${s.durationMs ? Math.min(100, (position / s.durationMs) * 100) : 0}%`;
+}, 1000);
