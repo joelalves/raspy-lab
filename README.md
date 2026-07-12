@@ -10,7 +10,7 @@ weather, and push notifications on outage/recovery.
 │ Server Pi (existing)     │        │ Touchscreen Pi (new)     │
 │                          │        │                          │
 │ - frontend               │        │ - dashboard/ (Node app)  │
-│ - backend                │        │ - Chromium kiosk mode    │
+│ - backend                │        │ - Firefox kiosk mode     │
 │ - jenkins                │  LAN   │                          │
 │ - sonarqube              │        │ Polls server-agent, plus │
 │ - postgres               │        │ Jenkins, SonarQube,      │
@@ -221,10 +221,10 @@ otherwise. Volume is remembered across stations (and page reloads) via
 `localStorage`; playback itself doesn't resume after a reload — same as
 turning a physical radio back on after a power cycle.
 
-Only direct MP3/AAC stream URLs are used, not `.m3u8`/HLS — Chromium's plain
+Only direct MP3/AAC stream URLs are used, not `.m3u8`/HLS — a plain
 `<audio>` element can't play HLS without extra JS libraries. If you want to
 swap a station or add your own, edit `RADIO_STATIONS` in
-`dashboard/public/app.js`; verify any new URL actually serves audio first
+`dashboard/public/js/radio.js`; verify any new URL actually serves audio first
 (`curl -I <url>` should show `Content-Type: audio/...`, not `text/html` or
 `application/vnd.apple.mpegurl`).
 

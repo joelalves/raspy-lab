@@ -2,24 +2,52 @@
 # Run this ON THE TOUCHSCREEN PI (Raspberry Pi OS with Desktop, not Lite),
 # after the dashboard.service is installed and running on port 8080.
 #
-# Sets up Chromium to auto-launch full-screen against the local dashboard
-# whenever the desktop session starts. Detects the actual chromium binary
-# name (Bookworm ships "chromium", older releases shipped "chromium-browser")
-# and writes autostart entries for whichever desktop is actually running:
-# labwc (Bookworm's default Wayland compositor), wayfire (earlier Bookworm
-# images), and legacy X11/LXDE - so this works regardless of which one your
-# Pi has, without needing to detect it up front.
+# Sets up Firefox to auto-launch full-screen against the local dashboard
+# whenever the desktop session starts, and writes autostart entries for
+# whichever desktop is actually running: labwc (Bookworm's default Wayland
+# compositor), wayfire (earlier Bookworm images), and legacy X11/LXDE - so
+# this works regardless of which one your Pi has, without needing to detect
+# it up front.
+#
+# Firefox instead of Chromium: Spotify's Web Playback SDK needs Widevine/EME
+# for DRM-protected audio, and Raspberry Pi OS's Chromium package has proven
+# unreliable for that (component-updater fetch blocked/never completing).
+# Firefox ships its own officially-licensed Widevine download path, which is
+# more likely to actually work. Safe to re-run this script after switching
+# from an earlier Chromium-based setup - it replaces the old autostart
+# entries rather than adding Firefox alongside them.
 
 set -euo pipefail
 KIOSK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-CHROMIUM_BIN=$(command -v chromium || command -v chromium-browser || true)
-if [ -z "$CHROMIUM_BIN" ]; then
-  echo "Could not find 'chromium' or 'chromium-browser' on PATH. Install with: sudo apt install chromium" >&2
+FIREFOX_BIN=$(command -v firefox || command -v firefox-esr || true)
+if [ -z "$FIREFOX_BIN" ]; then
+  echo "Could not find 'firefox' or 'firefox-esr' on PATH. Install with: sudo apt install firefox-esr" >&2
   exit 1
 fi
 
-KIOSK_CMD="$CHROMIUM_BIN --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --check-for-update-interval=1 --incognito --app=http://localhost:8080"
+# A dedicated profile, not your regular one - kiosk mode has no menu bar to
+# click through Settings, so DRM playback and the various first-run/crash
+# prompts that would otherwise block the kiosk have to be pre-configured
+# here instead. Firefox reads user.js fresh on every launch, so re-running
+# this script always picks up any changes made below.
+FIREFOX_PROFILE_DIR="$HOME/.config/raspy-lab-firefox-kiosk"
+mkdir -p "$FIREFOX_PROFILE_DIR"
+cat > "$FIREFOX_PROFILE_DIR/user.js" <<'EOF'
+// Enables DRM-protected playback (Widevine/EME) - the "Play DRM-controlled
+// content" checkbox under Settings > General, set here since kiosk mode has
+// no menu to click it manually.
+user_pref("media.eme.enabled", true);
+// Kiosk-mode prompts that would otherwise block the fullscreen window with
+// no way to dismiss them (no window chrome/menu bar to click through).
+user_pref("browser.sessionstore.resume_from_crash", false);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("browser.tabs.warnOnClose", false);
+user_pref("datareporting.policy.dataSubmissionEnabled", false);
+EOF
+
+KIOSK_CMD="$FIREFOX_BIN -kiosk -profile $FIREFOX_PROFILE_DIR http://localhost:8080"
 
 # Bluetooth speaker auto-reconnect - installed as a user systemd service, not
 # a system one, because the Bluetooth audio profile has to be negotiated with
@@ -64,15 +92,26 @@ EOF
 chmod +x "$HOME/.config/labwc/hdmi-audio-default.sh"
 
 # labwc (Raspberry Pi OS Bookworm's default compositor) - reads a plain shell
-# script, not .desktop files. Append (don't overwrite - the file may already
-# start the panel/wallpaper) and only add our lines once.
+# script, not .desktop files. Managed via markers (not a plain append-if-
+# missing) so re-running this script after switching kiosk browsers replaces
+# the old launch command instead of leaving both autostarting - the file may
+# also contain unrelated lines (panel/wallpaper) from outside this script,
+# which are left untouched since only the marked block is ever rewritten.
 touch "$HOME/.config/labwc/autostart"
-grep -qxF "$HOME/.config/labwc/hdmi-audio-default.sh &" "$HOME/.config/labwc/autostart" || echo "$HOME/.config/labwc/hdmi-audio-default.sh &" >> "$HOME/.config/labwc/autostart"
-grep -qxF "$KIOSK_CMD &" "$HOME/.config/labwc/autostart" || echo "$KIOSK_CMD &" >> "$HOME/.config/labwc/autostart"
+sed -i '/# BEGIN raspy-lab-kiosk/,/# END raspy-lab-kiosk/d' "$HOME/.config/labwc/autostart"
+{
+  echo "# BEGIN raspy-lab-kiosk"
+  echo "$HOME/.config/labwc/hdmi-audio-default.sh &"
+  echo "$KIOSK_CMD &"
+  echo "# END raspy-lab-kiosk"
+} >> "$HOME/.config/labwc/autostart"
 
 # wayfire (used by some earlier Bookworm images) - ini-style autostart section.
-if [ -f "$HOME/.config/wayfire.ini" ] && ! grep -q "dashboard-kiosk" "$HOME/.config/wayfire.ini"; then
-  printf '\n[autostart]\ndashboard-kiosk = %s\n' "$KIOSK_CMD" >> "$HOME/.config/wayfire.ini"
+# Same idempotent-replace reasoning as labwc above.
+if [ -f "$HOME/.config/wayfire.ini" ]; then
+  sed -i '/^dashboard-kiosk = /d' "$HOME/.config/wayfire.ini"
+  grep -qx '\[autostart\]' "$HOME/.config/wayfire.ini" || printf '\n[autostart]\n' >> "$HOME/.config/wayfire.ini"
+  printf 'dashboard-kiosk = %s\n' "$KIOSK_CMD" >> "$HOME/.config/wayfire.ini"
 fi
 
 # Legacy X11/LXDE - standard XDG autostart .desktop entry.
@@ -85,5 +124,5 @@ Exec=$KIOSK_CMD
 X-GNOME-Autostart-enabled=true
 EOF
 
-echo "Kiosk autostart installed for labwc/wayfire/X11 (chromium binary: $CHROMIUM_BIN)."
+echo "Kiosk autostart installed for labwc/wayfire/X11 (firefox binary: $FIREFOX_BIN)."
 echo "Reboot the touchscreen Pi to launch it full-screen: sudo reboot"
