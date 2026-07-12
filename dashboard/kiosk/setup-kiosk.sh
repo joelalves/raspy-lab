@@ -47,7 +47,20 @@ user_pref("browser.tabs.warnOnClose", false);
 user_pref("datareporting.policy.dataSubmissionEnabled", false);
 EOF
 
-KIOSK_CMD="$FIREFOX_BIN -kiosk -profile $FIREFOX_PROFILE_DIR http://localhost:8080"
+# A profile lock file (Firefox's way of detecting "am I already running")
+# survives an unclean shutdown - common on a Pi that gets power-cycled
+# instead of properly rebooted - and the next launch then shows an
+# interactive "Firefox is already running" dialog with no way to dismiss it
+# in kiosk mode. Clear any stale lock before every launch, not just once
+# during setup, since this can happen after any future unclean shutdown too.
+cat > "$FIREFOX_PROFILE_DIR/launch-kiosk.sh" <<EOF
+#!/usr/bin/env bash
+rm -f "$FIREFOX_PROFILE_DIR/lock" "$FIREFOX_PROFILE_DIR/.parentlock"
+exec "$FIREFOX_BIN" -kiosk -profile "$FIREFOX_PROFILE_DIR" http://localhost:8080
+EOF
+chmod +x "$FIREFOX_PROFILE_DIR/launch-kiosk.sh"
+
+KIOSK_CMD="$FIREFOX_PROFILE_DIR/launch-kiosk.sh"
 
 # Bluetooth speaker auto-reconnect - installed as a user systemd service, not
 # a system one, because the Bluetooth audio profile has to be negotiated with
