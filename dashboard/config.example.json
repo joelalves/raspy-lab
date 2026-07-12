@@ -28,6 +28,11 @@
   "bluetooth": {
     "mac": "AA:BB:CC:DD:EE:FF"
   },
+  "spotify": {
+    "clientId": "your-spotify-app-client-id",
+    "clientSecret": "your-spotify-app-client-secret",
+    "redirectUri": "http://TOUCHSCREEN_PI_IP:8080/api/spotify/callback"
+  },
   "notifications": {
     "ntfyUrl": "https://ntfy.sh/your-unique-topic-name"
   }

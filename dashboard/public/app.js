@@ -121,6 +121,120 @@ function renderRadioTab() {
   }).join('');
 }
 
+// Spotify: the Web Playback SDK turns this browser into an actual Spotify
+// Connect device (audio plays through the same PipeWire/Bluetooth pipeline
+// as the Radio tab), while the now-playing info and Play/Pause/Next/Prev
+// controls talk to Spotify's Web API directly and act on whichever device is
+// currently active - so this also works as a remote for playback on your
+// phone, not just for this Pi.
+let spotifyPlayer = null;
+let spotifyDeviceId = null;
+let spotifyAccessToken = null;
+let latestSpotify = {
+  linked: false, isPlaying: false, trackName: null, artistName: null,
+  albumArt: null, deviceName: null, deviceId: null, itemType: null, volumePercent: null,
+};
+
+async function getSpotifyToken() {
+  try {
+    const res = await fetch('/api/spotify/token');
+    const data = await res.json();
+    spotifyAccessToken = data.accessToken || null;
+  } catch {
+    spotifyAccessToken = null;
+  }
+  return spotifyAccessToken;
+}
+
+window.onSpotifyWebPlaybackSDKReady = () => {
+  spotifyPlayer = new Spotify.Player({
+    name: 'Raspy Dashboard',
+    getOAuthToken: (cb) => getSpotifyToken().then((token) => cb(token || '')),
+    volume: 0.5,
+  });
+  spotifyPlayer.addListener('ready', ({ device_id }) => {
+    spotifyDeviceId = device_id;
+    renderSpotifyTab();
+  });
+  spotifyPlayer.addListener('not_ready', () => {
+    spotifyDeviceId = null;
+  });
+  spotifyPlayer.addListener('initialization_error', ({ message }) => console.error('[spotify] init:', message));
+  spotifyPlayer.addListener('authentication_error', ({ message }) => console.error('[spotify] auth:', message));
+  spotifyPlayer.addListener('account_error', ({ message }) => console.error('[spotify] account (Premium required):', message));
+  spotifyPlayer.connect();
+};
+
+async function spotifyApi(method, path, body) {
+  if (!spotifyAccessToken) await getSpotifyToken();
+  if (!spotifyAccessToken) return;
+  try {
+    await fetch(`https://api.spotify.com/v1/me/player${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${spotifyAccessToken}`, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    console.error('[spotify] control call failed:', err.message);
+  }
+}
+
+function spotifyPlayPause() {
+  spotifyApi('PUT', latestSpotify.isPlaying ? '/pause' : '/play');
+}
+function spotifyNext() {
+  spotifyApi('POST', '/next');
+}
+function spotifyPrev() {
+  spotifyApi('POST', '/previous');
+}
+function spotifyPlayHere() {
+  if (!spotifyDeviceId) return;
+  spotifyApi('PUT', '', { device_ids: [spotifyDeviceId], play: true });
+}
+function spotifyVolume(delta) {
+  const current = latestSpotify.volumePercent != null ? latestSpotify.volumePercent : 50;
+  const next = Math.max(0, Math.min(100, current + delta));
+  spotifyApi('PUT', `/volume?volume_percent=${next}`);
+}
+
+function renderSpotifyTab() {
+  const view = document.getElementById('view-spotify');
+  if (!view) return;
+  const s = latestSpotify;
+  if (!s.linked) {
+    view.innerHTML = `
+      <div class="spotify-connect">
+        <div class="spotify-connect-icon">🎧</div>
+        <p>Connect your Spotify Premium account to listen here.</p>
+        <a class="spotify-btn-primary" href="/api/spotify/login">Connect Spotify</a>
+      </div>`;
+    return;
+  }
+  const playingHere = spotifyDeviceId && s.deviceId === spotifyDeviceId;
+  const art = s.albumArt
+    ? `<img class="spotify-art" src="${s.albumArt}" alt="">`
+    : '<div class="spotify-art spotify-art-fallback">🎵</div>';
+  view.innerHTML = `
+    <div class="spotify-now-playing">
+      ${art}
+      <div class="spotify-track-name">${s.trackName || 'Nothing playing'}</div>
+      <div class="spotify-artist-name">${s.artistName || ''}</div>
+      ${s.deviceName ? `<div class="spotify-device">Playing on: ${s.deviceName}</div>` : ''}
+      ${!playingHere && spotifyDeviceId ? '<button id="spotify-play-here" class="spotify-btn-primary">▶ Play on this speaker</button>' : ''}
+      <div class="spotify-controls">
+        <button id="spotify-prev" class="radio-btn" title="Previous">⏮</button>
+        <button id="spotify-playpause" class="radio-btn" title="Play/Pause">${s.isPlaying ? '⏸' : '▶'}</button>
+        <button id="spotify-next" class="radio-btn" title="Next">⏭</button>
+      </div>
+      <div class="spotify-volume">
+        <button id="spotify-vol-down" class="radio-btn" title="Volume down">−</button>
+        <span id="spotify-vol-pct">${s.volumePercent != null ? `${s.volumePercent}%` : '—'}</span>
+        <button id="spotify-vol-up" class="radio-btn" title="Volume up">+</button>
+      </div>
+    </div>`;
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '0 MB';
   const mb = bytes / (1024 * 1024);
@@ -549,6 +663,9 @@ async function refresh() {
     latestBluetooth = data.bluetooth || latestBluetooth;
     updateRadioUI();
 
+    latestSpotify = data.spotify || latestSpotify;
+    renderSpotifyTab();
+
     const order = ['good', 'warning', 'serious', 'critical'];
     const worst = (statuses) => statuses.reduce((w, s) => (order.indexOf(s) > order.indexOf(w) ? s : w), 'good');
     const overall = worst([data.overview.agent.status, data.docker.status, data.jenkins.status, data.sonarqube.status, data.postgres.status, data.pihole.status, data.shelly.status]);
@@ -579,6 +696,7 @@ async function refresh() {
     const serverTemp = data.overview.serverSystem && data.overview.serverSystem.cpuTempC;
     setNavBadge('system', serverTemp != null ? `${serverTemp}°C` : '', tempStatus(serverTemp));
     setNavBadge('shelly', data.shelly.currentPowerW != null ? `${data.shelly.currentPowerW} W` : '', data.shelly.status);
+    setNavBadge('spotify', data.spotify.isPlaying ? '▶ playing' : '', data.spotify.status);
 
     document.getElementById('updated-at').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;
   } catch (err) {
@@ -733,7 +851,17 @@ document.getElementById('radio-vol-up').addEventListener('click', () => changeVo
 document.getElementById('radio-mute-btn').addEventListener('click', toggleMute);
 document.getElementById('radio-stop-btn').addEventListener('click', stopRadio);
 
+document.getElementById('view-spotify').addEventListener('click', (e) => {
+  if (e.target.id === 'spotify-play-here') spotifyPlayHere();
+  else if (e.target.id === 'spotify-playpause') spotifyPlayPause();
+  else if (e.target.id === 'spotify-next') spotifyNext();
+  else if (e.target.id === 'spotify-prev') spotifyPrev();
+  else if (e.target.id === 'spotify-vol-down') spotifyVolume(-10);
+  else if (e.target.id === 'spotify-vol-up') spotifyVolume(10);
+});
+
 renderRadioTab();
+renderSpotifyTab();
 
 refresh();
 setInterval(refresh, POLL_MS);
