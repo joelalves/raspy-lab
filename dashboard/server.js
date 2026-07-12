@@ -597,6 +597,10 @@ async function refreshSpotify() {
     const data = await res.json();
     const item = data.item || {};
     const isEpisode = item.type === 'episode';
+    // Temporary: podcasts have been showing up with no name/art on the Now
+    // Playing tab - log the raw shape once so we can see what's actually
+    // missing instead of guessing.
+    if (isEpisode) console.log('[spotify:debug episode item]', JSON.stringify(item).slice(0, 1000));
     logOnce('spotify', null);
     return {
       status: 'good',
