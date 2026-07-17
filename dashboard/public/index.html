@@ -55,6 +55,7 @@
         <button data-view="shelly"><span>Shelly</span><small id="badge-shelly"></small></button>
         <button data-view="radio"><span>Radio</span><small id="badge-radio"></small></button>
         <button data-view="spotify"><span>Spotify</span><small id="badge-spotify"></small></button>
+        <button data-view="iptv"><span>IPTV</span><small id="badge-iptv"></small></button>
       </nav>
       <main>
         <section id="view-overview" class="view active"></section>
@@ -67,6 +68,7 @@
         <section id="view-shelly" class="view"></section>
         <section id="view-radio" class="view"></section>
         <section id="view-spotify" class="view"></section>
+        <section id="view-iptv" class="view"></section>
       </main>
     </div>
     <footer id="updated-at">—</footer>
@@ -80,8 +82,12 @@
       </div>
     </div>
     <audio id="radio-audio" preload="none"></audio>
+    <video id="iptv-video" playsinline></video>
   </div>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.16/dist/hls.min.js"
+    integrity="sha384-5E8B0pTlZZJMabWpC0fyYf6OUpe15jJij34BqBAh4NXoHAlLNOjCPRrwtOXOQFAn"
+    crossorigin="anonymous"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

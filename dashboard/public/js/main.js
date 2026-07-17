@@ -8,6 +8,7 @@ import { worstStatus, tempStatus } from './format.js';
 import { renderOverview, renderSystemTab, renderDocker, renderJenkins, renderSonarQube, renderWeather, renderPihole, renderShelly } from './views.js';
 import { updateRadioUI, ingestBluetooth, initRadio } from './radio.js';
 import { ingestSpotifyPoll, initSpotify } from './spotify.js';
+import { initIptv } from './iptv.js';
 import { switchView, applyTheme, setNavBadge, THEME_KEY } from './nav.js';
 
 const POLL_MS = 8000;
@@ -196,6 +197,7 @@ document.addEventListener('pointercancel', endJenkinsHold);
 
 initRadio();
 initSpotify();
+initIptv();
 
 refresh();
 setInterval(refresh, POLL_MS);
