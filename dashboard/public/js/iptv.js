@@ -87,9 +87,13 @@ function toggleIptvFullscreen() {
 
 document.addEventListener('fullscreenchange', () => {
   iptvFullscreen = !!document.fullscreenElement;
-  // Only re-render if the IPTV tab is what's actually on screen - avoids
-  // clobbering another tab's DOM if fullscreen exits while elsewhere.
-  if (document.getElementById('view-iptv').classList.contains('active')) renderIptvTab();
+  // Update the button in place rather than calling renderIptvTab(): that
+  // rebuilds view.innerHTML, which detaches the fullscreen <video> from the
+  // document - and per spec, removing the fullscreen element from the DOM
+  // immediately exits fullscreen, so a full re-render here would make
+  // fullscreen enter and instantly exit again.
+  const btn = document.getElementById('iptv-fullscreen-btn');
+  if (btn) btn.textContent = iptvFullscreen ? '⤢ Exit Fullscreen' : '⛶ Fullscreen';
 });
 
 function iptvChannelCard(channel) {
