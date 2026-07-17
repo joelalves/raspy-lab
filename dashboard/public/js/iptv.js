@@ -5,18 +5,14 @@
 // Every channel below was individually verified against the broadcaster's
 // own domain (not an aggregator list) before being added - see the project
 // notes on this feature for which countries/channels had a clean
-// verification path. Portugal's are all RTP (the public broadcaster, one
-// domain for every channel); Spain's are regional public broadcasters, each
-// confirmed on their own domain.
+// verification path. Portugal's RTP was tested and dropped: RTP's own
+// servers return an empty 204 whenever a real cross-origin browser Origin
+// header is present (confirmed across the whole RTP domain, not just one
+// channel) - a deliberate restriction on third-party embedding, not
+// something to work around with a header-stripping proxy. Spain's are
+// regional public broadcasters, each confirmed on their own domain,
+// including with an Origin header present.
 const IPTV_CHANNELS = [
-  { id: 'rtp1', name: 'RTP1', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtp1HD.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/RTP1_-_Logo_2016.svg/640px-RTP1_-_Logo_2016.svg.png' },
-  { id: 'rtp2', name: 'RTP2', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/rtp2HD.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/en/4/4d/Rtp2_2016_logo.png' },
-  { id: 'rtp3', name: 'RTP3', country: 'Portugal', url: 'https://streaming-live.rtp.pt/livetvhlsDVR/rtpnHDdvr.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b9/Rtp3.png' },
-  { id: 'rtp-acores', name: 'RTP Açores', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtpacoresHD.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/a/aa/RTP_A%C3%A7ores_%282016%29.svg' },
-  { id: 'rtp-madeira', name: 'RTP Madeira', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtpmadeira.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/en/a/ac/RTP_Madeira_2016.png' },
-  { id: 'rtp-noticias', name: 'RTP Notícias', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtpnHD.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b9/Rtp3.png' },
-  { id: 'rtp-mundo', name: 'RTP Mundo', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtpi.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/1/17/RTP_Mundo.svg' },
-  { id: 'rtp-africa', name: 'RTP África', country: 'Portugal', url: 'https://streaming-live.rtp.pt/liverepeater/smil:rtpafrica.smil/playlist.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/RTP_%C3%81frica_2016.png' },
   { id: 'etb1', name: 'ETB1', country: 'Spain', url: 'https://multimedia.eitb.eus/live-content/etb1hd-hls/master.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/ETB1_2022_logo.svg/500px-ETB1_2022_logo.svg.png' },
   { id: 'etb2', name: 'ETB2', country: 'Spain', url: 'https://multimedia.eitb.eus/live-content/etb2hd-hls/master.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/ETB2_2022_logo.svg/500px-ETB2_2022_logo.svg.png' },
   { id: 'tv3cat', name: 'TV3CAT', country: 'Spain', url: 'https://directes3-tv-int.3catdirectes.cat/live-content/tvi-hls/master.m3u8', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/TV3CAT.svg/500px-TV3CAT.svg.png' },
